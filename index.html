@@ -315,6 +315,7 @@
 <script>
 // ── STORAGE KEY ───────────────────────────────────────────────────────────────
 const SK = 'betting_mgr_v3';
+const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzjeKEh5qk3eaCgZ6GRYRWXYbd9e_LWkPzPGaFnPvbDSSrZX5BCPbYC7DY4KuvnXa_Aew/exec';
 let S = {
   capital: 1_000_000, capitalInicial: 1_000_000,
   pctAP: 0.3,           // porcentaje (no decimal), e.g. 0.3 = 0.3%
@@ -328,7 +329,16 @@ let resSeleccionado  = 'ganado';
 let tipoMovActual    = 'ingreso';
 
 function loadS(){try{const r=localStorage.getItem(SK);if(r)S={...S,...JSON.parse(r)}}catch(e){}}
-function saveS(){try{localStorage.setItem(SK,JSON.stringify(S))}catch(e){}}
+function saveS(){
+  try{localStorage.setItem(SK,JSON.stringify(S))}catch(e){}
+}
+function syncSheets(action, data){
+  if(!SHEETS_URL) return;
+  fetch(SHEETS_URL, {
+    method:'POST',
+    body: JSON.stringify({action, data}),
+  }).catch(e=>console.log('Sheets sync error:',e));
+}
 
 // ── FÓRMULA ───────────────────────────────────────────────────────────────────
 function calcAM(){ return Math.max(1000, Math.round(S.capital * S.pctAP / 100)); }
@@ -527,6 +537,7 @@ function registrarPartido(){
   };
   S.partidos.push(p);
   saveS();
+  syncSheets('registrar_partido', p);
   closeSheet('sh-nuevo');
   renderMain();
   toast(`Partido registrado · Apuesta: ${fmt(p.apuesta)}`);
@@ -614,6 +625,8 @@ function confirmarResultado(){
     toast(`Perdiste. MG n=${S.numMG} activa`,'err');
   }
   saveS();
+  syncSheets('actualizar_partido', S.partidos.find(x=>x.id===p.id));
+syncSheets('actualizar_capital', {capital:S.capital, racha:S.racha, num_mg:S.numMG, ts:new Date().toISOString()});
   closeSheet('sh-resultado');
   renderMain();
 }
@@ -676,6 +689,8 @@ function confirmarMovimiento(){
     fecha, hora, timestamp:new Date().toISOString()
   });
   saveS();
+  const mov = S.movimientos[S.movimientos.length-1];
+  syncSheets('registrar_movimiento', {...mov, capital_resultante: S.capital});
   document.getElementById('mov-monto').value='';
   document.getElementById('mov-desc').value='';
   closeSheet('sh-movimiento');
