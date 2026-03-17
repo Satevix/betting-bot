@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Betting Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0a0a0f; --bg2:#13131f; --bg3:#1a1a2e;
+    --border:#1e1e2e; --border2:#2a2a3a;
+    --text:#e8e4d9; --muted:#4a4a6a; --muted2:#6a6a8a;
+    --accent:#c8f542; --accent2:#42f5a8;
+    --danger:#ff4040; --danger2:#ff6060;
+    --warn:#f5d442; --purple:#9090f0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:'DM Mono','Courier New',monospace;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:84px;overflow-x:hidden}
+  ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border2)}
+  .bebas{font-family:'Bebas Neue',sans-serif;letter-spacing:.04em}
+  .lbl{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);display:block;margin-bottom:5px}
+  .section-title{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:.05em}
+  .page{display:none;padding:16px 18px 0}.page.active{display:block}
+  header{padding:22px 18px 14px;border-bottom:1px solid var(--border)}
+  .hrow{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+  .hsub{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#3a3a5a;margin-bottom:2px}
+  .pbar{height:4px;background:var(--border)}
+  .pfill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .6s}
+  .plabels{display:flex;justify-content:space-between;font-size:9px;color:#3a3a5a;margin-top:3px;letter-spacing:.05em}
+  .card{background:var(--bg2);border:1px solid var(--border);padding:16px;margin-bottom:10px}
+  .card-hl{background:linear-gradient(135deg,var(--bg2),var(--bg3))}
+  .card-danger{border-left:3px solid var(--danger);background:#0f0808}
+  .card-win{background:#080f08;border-color:#1a3a10}
+  .tag{display:inline-block;padding:2px 9px;font-size:10px;letter-spacing:.09em;text-transform:uppercase}
+  .tag-mg{background:var(--danger);color:#fff}
+  .tag-ok{background:#2a2a3a;color:#9090a0}
+  .tag-ganado{background:#1a3a1a;color:var(--accent);border:1px solid var(--accent)}
+  .tag-perdido{background:#3a1a1a;color:var(--danger2);border:1px solid var(--danger)}
+  .tag-pendiente{background:#2a2a1a;color:var(--warn);border:1px solid var(--warn)}
+  .tag-programado{background:#1a1a3a;color:var(--purple);border:1px solid var(--purple)}
+  button{font-family:'DM Mono',monospace;cursor:pointer;border:none;transition:all .15s;-webkit-appearance:none}
+  .btn-p{background:var(--accent);color:var(--bg);font-weight:500;padding:13px 20px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;width:100%;display:block}
+  .btn-p:active{opacity:.85;transform:scale(.99)}
+  .btn-s{background:transparent;color:var(--text);border:1px solid var(--border2);padding:9px 16px;font-size:12px;letter-spacing:.04em;font-family:'DM Mono',monospace}
+  .btn-s:active{border-color:var(--accent);color:var(--accent)}
+  .btn-s.sel{border-color:var(--accent);color:var(--accent)}
+  .btn-danger-full{background:var(--danger);color:#fff;padding:12px 20px;font-size:12px;width:100%;letter-spacing:.06em;font-family:'DM Mono',monospace}
+  .btn-res{padding:14px;font-size:13px;width:100%;border:1px solid var(--border2);background:transparent;color:var(--text);font-family:'DM Mono',monospace}
+  .btn-res.sel-win{border-color:var(--accent);color:var(--accent);background:#0a1a0a}
+  .btn-res.sel-lose{border-color:var(--danger);color:var(--danger2);background:#1a0808}
+  input,select{background:var(--bg2);border:1px solid var(--border2);color:var(--text);padding:10px 12px;font-family:'DM Mono',monospace;font-size:13px;width:100%;outline:none;-webkit-appearance:none;appearance:none;border-radius:0;transition:border .15s}
+  input:focus,select:focus{border-color:var(--accent)}
+  input::placeholder{color:#3a3a5a}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .fb{display:flex;justify-content:space-between;align-items:center}
+  .mb8{margin-bottom:8px}.mb12{margin-bottom:12px}.mb16{margin-bottom:16px}
+  .mt8{margin-top:8px}.mt12{margin-top:12px}
+  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:100;align-items:flex-end;justify-content:center}
+  .overlay.open{display:flex}
+  .sheet{background:var(--bg2);border:1px solid var(--border2);border-bottom:none;width:100%;max-width:520px;padding:24px 18px 52px;max-height:93vh;overflow-y:auto}
+  .sh-title{font-family:'Bebas Neue',sans-serif;font-size:22px}
+  .sh-close{background:transparent;border:1px solid var(--border2);color:var(--text);padding:6px 12px;font-size:13px;font-family:'DM Mono',monospace;cursor:pointer}
+  .nav-bar{position:fixed;bottom:0;left:0;right:0;background:#0d0d18;border-top:1px solid var(--border);display:flex;justify-content:space-around;padding:8px 0 20px;z-index:50}
+  .nav-item{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 12px;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);transition:color .15s}
+  .nav-item.active{color:var(--accent)}
+  .nav-icon{font-size:20px}
+  #toast{position:fixed;top:-60px;left:50%;transform:translateX(-50%);z-index:200;padding:11px 22px;font-size:12px;letter-spacing:.04em;max-width:340px;width:92%;text-align:center;transition:top .3s;border-radius:0}
+  #toast.show{top:20px}
+  hr{border:none;border-top:1px solid var(--border);margin:18px 0}
+  .stat-card{background:var(--bg2);border:1px solid var(--border);padding:12px;text-align:center}
+  .stat-val{font-family:'Bebas Neue',sans-serif;font-size:24px}
+  .stat-lbl{font-size:9px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+  .shine{position:relative;overflow:hidden}
+  .shine::after{content:'';position:absolute;top:-50%;left:-60%;width:30%;height:200%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.03),transparent);transform:skewX(-20deg);animation:shine 6s infinite}
+  @keyframes shine{0%,100%{left:-60%}50%{left:130%}}
+  .pct-btns{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .pct-btn{padding:5px 10px;font-size:10px;background:transparent;border:1px solid var(--border2);color:var(--muted2);font-family:'DM Mono',monospace;cursor:pointer;letter-spacing:.06em}
+  .pct-btn.sel{border-color:var(--accent);color:var(--accent)}
+  .sim-table{width:100%;border-collapse:collapse;font-size:11px}
+  .sim-table th{padding:5px 6px;text-align:right;color:var(--muted);font-weight:400;font-size:9px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)}
+  .sim-table td{padding:5px 6px;text-align:right;border-bottom:1px solid #131320}
+  .sim-table td:first-child{text-align:left}
+  .hist-item{background:var(--bg2);border:1px solid var(--border);padding:13px;margin-bottom:7px}
+  .mov-item{background:var(--bg2);border:1px solid var(--border);padding:12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+  .mov-ing{color:var(--accent)}
+  .mov-egr{color:var(--danger2)}
+  .preview-box{background:#080f08;border:1px solid #1a3a10;padding:14px;margin-bottom:14px;display:none}
+  .preview-box.vis{display:block}
+  .fgroup{margin-bottom:12px}
+  .inline-info{font-size:10px;color:var(--muted);margin-top:4px}
+  .tipo-btn-row{display:flex;gap:8px;margin-bottom:12px}
+  .tipo-btn{flex:1;padding:10px;font-size:11px;background:transparent;border:1px solid var(--border2);color:var(--muted2);font-family:'DM Mono',monospace;cursor:pointer;letter-spacing:.06em;text-transform:uppercase}
+  .tipo-btn.sel-ing{border-color:var(--accent);color:var(--accent);background:#0a1a0a}
+  .tipo-btn.sel-egr{border-color:var(--danger);color:var(--danger2);background:#1a0808}
+  @media(max-width:380px){.sheet{padding:20px 14px 52px}.card{padding:13px}.section-title{font-size:22px}}
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- HEADER -->
+<header>
+  <div class="hrow">
+    <div>
+      <div class="hsub">Sistema de apuestas</div>
+      <div class="section-title bebas">BETTING MGR</div>
+    </div>
+    <div style="text-align:right">
+      <div class="lbl" style="margin-bottom:2px">Capital</div>
+      <div class="bebas" id="hdr-capital" style="font-size:20px;color:var(--accent);line-height:1.2">$0</div>
+    </div>
+  </div>
+  <div class="pbar"><div class="pfill" id="pfill" style="width:100%"></div></div>
+  <div class="plabels">
+    <span>$0</span>
+    <span id="plabel">100% restante</span>
+    <span id="pmax">$1.000.000</span>
+  </div>
+</header>
+
+<!-- PAGE: JUGAR -->
+<div class="page active" id="page-jugar">
+  <div class="card card-danger mb12" id="alerta-mg" style="display:none">
+    <div class="fb">
+      <div>
+        <div style="font-size:10px;color:var(--danger2);letter-spacing:.12em;text-transform:uppercase">⚠ Racha activa</div>
+        <div class="bebas" style="font-size:22px;color:#ff7070;margin-top:2px" id="mg-titulo">Martingala n=1</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:9px;color:#5a3a3a;text-transform:uppercase;letter-spacing:.08em">Pérd. acumulada</div>
+        <div style="font-size:14px;color:var(--danger2);font-weight:500" id="mg-perdida">$0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card card-hl shine mb12">
+    <div class="lbl" style="margin-bottom:10px">Próxima apuesta sugerida</div>
+    <div class="fb" style="align-items:flex-end">
+      <div>
+        <div class="bebas" style="font-size:34px;color:var(--accent);line-height:1" id="prox-ap">$0</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:5px" id="prox-meta">AM $0 · Cuota ref 1.833</div>
+        <div style="font-size:11px;margin-top:2px">Si ganas: <span id="prox-gan" style="font-weight:500">$0</span></div>
+      </div>
+      <span class="tag tag-ok" id="prox-tipo">Normal</span>
+    </div>
+  </div>
+
+  <div id="area-partidos"></div>
+
+  <div class="g3 mb8">
+    <div class="stat-card"><div class="stat-val" style="color:var(--accent)" id="s-gan">0</div><div class="stat-lbl">Ganados</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-jug">0</div><div class="stat-lbl">Jugados</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--accent2)" id="s-ef">—</div><div class="stat-lbl">Efectiv.</div></div>
+  </div>
+  <div class="card fb">
+    <div>
+      <div class="lbl">Ganancia neta total</div>
+      <div class="bebas" style="font-size:20px" id="s-neto">$0</div>
+    </div>
+    <button class="btn-s" style="font-size:11px;padding:8px 12px" onclick="openSheet('sh-movimiento')">+ Movimiento</button>
+  </div>
+</div>
+
+<!-- PAGE: HISTORIAL -->
+<div class="page" id="page-historial">
+  <div class="section-title bebas mb12">HISTORIAL</div>
+  <div id="hist-lista"><div style="color:var(--muted);text-align:center;padding:48px 0;font-size:12px">Sin partidos registrados</div></div>
+</div>
+
+<!-- PAGE: CAPITAL -->
+<div class="page" id="page-capital">
+  <div class="section-title bebas mb12">CAPITAL</div>
+  <div class="g2 mb12">
+    <div class="stat-card"><div class="lbl">Capital actual</div><div class="bebas" style="font-size:16px;color:var(--accent)" id="cap-actual">$0</div></div>
+    <div class="stat-card"><div class="lbl">Capital inicial</div><div class="bebas" style="font-size:16px" id="cap-ini-disp">$0</div></div>
+    <div class="stat-card"><div class="lbl">Variación</div><div class="bebas" style="font-size:16px" id="cap-var">$0</div></div>
+    <div class="stat-card"><div class="lbl">Balance movimientos</div><div class="bebas" style="font-size:16px;color:var(--purple)" id="cap-movs">$0</div></div>
+  </div>
+  <button class="btn-p mb12" onclick="openSheet('sh-movimiento')">+ Registrar movimiento</button>
+  <div id="movs-lista"></div>
+</div>
+
+<!-- PAGE: CONFIG -->
+<div class="page" id="page-config">
+  <div class="section-title bebas mb12">CONFIGURACIÓN</div>
+  <div class="fgroup">
+    <span class="lbl">% Apuesta sobre capital</span>
+    <div class="pct-btns" id="pct-btns">
+      <button class="pct-btn" data-v="0.1">0.1%</button>
+      <button class="pct-btn" data-v="0.2">0.2%</button>
+      <button class="pct-btn" data-v="0.3">0.3%</button>
+      <button class="pct-btn" data-v="0.5">0.5%</button>
+      <button class="pct-btn" data-v="1.0">1.0%</button>
+      <button class="pct-btn" data-v="1.5">1.5%</button>
+      <button class="pct-btn" data-v="2.0">2.0%</button>
+      <button class="pct-btn" data-v="2.5">2.5%</button>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <input type="number" id="cfg-pct" step="0.1" min="0.1" max="10" style="width:80px" oninput="onPctInput()">
+      <span style="font-size:11px;color:var(--muted)" id="cfg-am-val">AM = $0</span>
+    </div>
+  </div>
+  <hr>
+  <div class="fgroup">
+    <span class="lbl">Cuota de referencia</span>
+    <input type="number" id="cfg-cuota" step="0.001" min="1.01" oninput="onCuotaInput()">
+    <div class="inline-info">La cuota real se define en cada partido</div>
+  </div>
+  <hr>
+  <div class="fgroup">
+    <span class="lbl">Capital inicial de referencia</span>
+    <input type="number" id="cfg-cap-ini" step="10000" oninput="onCapIniInput()">
+  </div>
+  <hr>
+  <div class="section-title bebas" style="font-size:20px;margin-bottom:10px">SIMULADOR</div>
+  <div id="sim-content"></div>
+  <hr>
+  <button class="btn-danger-full" onclick="resetSession()">Resetear sesión</button>
+  <div style="font-size:9px;color:#3a3a3a;text-align:center;margin-top:8px;letter-spacing:.06em">Datos guardados automáticamente</div>
+</div>
+
+<!-- NAV -->
+<nav class="nav-bar">
+  <div class="nav-item active" onclick="goTab('jugar')" id="nav-jugar"><span class="nav-icon">⚽</span><span>Jugar</span></div>
+  <div class="nav-item" onclick="goTab('historial')" id="nav-historial"><span class="nav-icon">📋</span><span>Historial</span></div>
+  <div class="nav-item" onclick="goTab('capital')" id="nav-capital"><span class="nav-icon">💰</span><span>Capital</span></div>
+  <div class="nav-item" onclick="goTab('config')" id="nav-config"><span class="nav-icon">⚙</span><span>Config</span></div>
+</nav>
+
+<!-- SHEET: NUEVO PARTIDO -->
+<div class="overlay" id="sh-nuevo">
+  <div class="sheet">
+    <div class="fb mb16"><div class="sh-title bebas">NUEVO PARTIDO</div><button class="sh-close" onclick="closeSheet('sh-nuevo')">✕</button></div>
+    <div class="preview-box" id="prev-box">
+      <div class="fb">
+        <div><div class="lbl">Apuesta calculada</div><div class="bebas" style="font-size:28px;color:var(--accent)" id="prev-ap">$0</div></div>
+        <div style="text-align:right"><div class="lbl">Si ganas</div><div class="bebas" style="font-size:20px;color:var(--accent2)" id="prev-gan">$0</div></div>
+      </div>
+    </div>
+    <div class="g2 mb12">
+      <div><span class="lbl">Local</span><input type="text" id="f-local" placeholder="Ej: Nacional" oninput="updSelEquipo()"></div>
+      <div><span class="lbl">Visitante</span><input type="text" id="f-visit" placeholder="Ej: Millonarios" oninput="updSelEquipo()"></div>
+    </div>
+    <div class="fgroup">
+      <span class="lbl">Apuesto a favor de</span>
+      <select id="f-apuesta-a"><option value="">Seleccionar...</option></select>
+    </div>
+    <div class="g2 mb12">
+      <div><span class="lbl">Cuota real</span><input type="number" id="f-cuota" step="0.001" min="1.01" placeholder="1.833" inputmode="decimal" oninput="updPreview()"></div>
+      <div><span class="lbl">Fecha partido</span><input type="date" id="f-fecha"></div>
+    </div>
+    <div class="fgroup">
+      <span class="lbl">Hora partido</span>
+      <input type="time" id="f-hora">
+    </div>
+    <button class="btn-p" onclick="registrarPartido()">Registrar partido</button>
+  </div>
+</div>
+
+<!-- SHEET: RESULTADO -->
+<div class="overlay" id="sh-resultado">
+  <div class="sheet">
+    <div class="fb mb12"><div class="sh-title bebas">RESULTADO</div><button class="sh-close" onclick="closeSheet('sh-resultado')">✕</button></div>
+    <div style="font-size:14px;color:#8080a0;margin-bottom:14px" id="res-titulo">— vs —</div>
+    <div class="fgroup">
+      <span class="lbl">¿Cómo terminó?</span>
+      <div class="g2 mb12">
+        <button class="btn-res sel-win" id="btn-gane" onclick="selRes('ganado')">✅ Gané</button>
+        <button class="btn-res" id="btn-perdi" onclick="selRes('perdido')">❌ Perdí</button>
+      </div>
+    </div>
+    <div class="g2 mb12">
+      <div><span class="lbl" id="lbl-gl">Goles local</span><input type="number" id="r-gl" min="0" value="0" inputmode="numeric"></div>
+      <div><span class="lbl" id="lbl-gv">Goles visitante</span><input type="number" id="r-gv" min="0" value="0" inputmode="numeric"></div>
+    </div>
+    <div class="card card-win mb12" id="res-gan-box" style="display:none">
+      <div class="lbl">Ganancia neta</div>
+      <div class="bebas" style="font-size:32px;color:var(--accent);text-align:center" id="res-gan-val">$0</div>
+    </div>
+    <button class="btn-p" onclick="confirmarResultado()">Confirmar resultado</button>
+  </div>
+</div>
+
+<!-- SHEET: MOVIMIENTO DE CAPITAL -->
+<div class="overlay" id="sh-movimiento">
+  <div class="sheet">
+    <div class="fb mb16"><div class="sh-title bebas">MOVIMIENTO</div><button class="sh-close" onclick="closeSheet('sh-movimiento')">✕</button></div>
+    <div class="fgroup">
+      <span class="lbl">Tipo de movimiento</span>
+      <div class="tipo-btn-row">
+        <button class="tipo-btn sel-ing" id="tipo-ing" onclick="selTipoMov('ingreso')">⬆ Ingreso</button>
+        <button class="tipo-btn" id="tipo-egr" onclick="selTipoMov('egreso')">⬇ Egreso / Retiro</button>
+      </div>
+    </div>
+    <div class="fgroup">
+      <span class="lbl">Monto</span>
+      <input type="number" id="mov-monto" step="10000" placeholder="500000" inputmode="numeric">
+    </div>
+    <div class="g2 mb12">
+      <div><span class="lbl">Fecha</span><input type="date" id="mov-fecha"></div>
+      <div><span class="lbl">Hora</span><input type="time" id="mov-hora"></div>
+    </div>
+    <div class="fgroup">
+      <span class="lbl">Descripción (opcional)</span>
+      <input type="text" id="mov-desc" placeholder="Ej: Recarga mensual">
+    </div>
+    <button class="btn-p" onclick="confirmarMovimiento()">Confirmar movimiento</button>
+  </div>
+</div>
+
+<script>
+// ── STORAGE KEY ───────────────────────────────────────────────────────────────
+const SK = 'betting_mgr_v3';
+let S = {
+  capital: 1_000_000, capitalInicial: 1_000_000,
+  pctAP: 0.3,           // porcentaje (no decimal), e.g. 0.3 = 0.3%
+  cuotaRef: 1.833,
+  partidos: [],
+  racha: 0, numMG: 0,
+  movimientos: [],      // ingresos y egresos
+};
+let resPartidoActual = null;
+let resSeleccionado  = 'ganado';
+let tipoMovActual    = 'ingreso';
+
+function loadS(){try{const r=localStorage.getItem(SK);if(r)S={...S,...JSON.parse(r)}}catch(e){}}
+function saveS(){try{localStorage.setItem(SK,JSON.stringify(S))}catch(e){}}
+
+// ── FÓRMULA ───────────────────────────────────────────────────────────────────
+function calcAM(){ return Math.max(1000, Math.round(S.capital * S.pctAP / 100)); }
+
+function calcApuesta(cuota){
+  const AM  = calcAM();
+  const div = cuota - 1;
+  let ap;
+  if(S.numMG === 0){
+    ap = AM;
+  } else {
+    const base = S.capital * S.pctAP / 100;
+    ap = Math.round(((base * (1 + S.numMG * 0.5)) + S.racha) / div);
+  }
+  ap = Math.max(ap, 1000);
+  const ganNeta = Math.round(ap * div) - S.racha;
+  return { ap, AM, ganNeta };
+}
+
+// ── FORMAT ────────────────────────────────────────────────────────────────────
+function fmt(n){ return '$'+Math.abs(Math.round(n)).toLocaleString('es-CO'); }
+function fmtSign(n){ return (n>=0?'+':'-')+fmt(n); }
+function nowDate(){ return new Date().toISOString().split('T')[0]; }
+function nowTime(){ return new Date().toTimeString().slice(0,5); }
+function fmtDT(fecha,hora){ return fecha+(hora?' '+hora:''); }
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
+let toastT;
+function toast(msg,type='ok'){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.style.background=type==='err'?'#2a0a0a':'#0a2a0a';
+  el.style.border=`1px solid ${type==='err'?'var(--danger)':'var(--accent)'}`;
+  el.style.color=type==='err'?'var(--danger2)':'var(--accent)';
+  el.classList.add('show');
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>el.classList.remove('show'),3500);
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+function goTab(t){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+t).classList.add('active');
+  document.getElementById('nav-'+t).classList.add('active');
+  if(t==='historial') renderHist();
+  if(t==='capital')   renderCap();
+  if(t==='config')    renderCfg();
+}
+
+// ── SHEETS ────────────────────────────────────────────────────────────────────
+function openSheet(id){
+  document.getElementById(id).classList.add('open');
+  if(id==='sh-nuevo') initNuevoForm();
+  if(id==='sh-movimiento') initMovForm();
+}
+function closeSheet(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.overlay').forEach(el=>{
+  el.addEventListener('click',e=>{ if(e.target===el) el.classList.remove('open'); });
+});
+
+// ── RENDER MAIN ───────────────────────────────────────────────────────────────
+function renderMain(){
+  const { capital, capitalInicial, numMG, racha, cuotaRef, partidos } = S;
+  const pct = Math.max(0,Math.min(100, capital/capitalInicial*100));
+  const info = calcApuesta(cuotaRef);
+
+  // Header
+  const capEl = document.getElementById('hdr-capital');
+  capEl.textContent = fmt(capital);
+  capEl.style.color = capital < capitalInicial*0.5 ? 'var(--danger)' : 'var(--accent)';
+  document.getElementById('pfill').style.width = pct+'%';
+  document.getElementById('plabel').innerHTML =
+    `${Math.round(pct)}% restante · ${numMG>0
+      ? `<span style="color:var(--danger2)">MG n=${numMG} activa</span>`
+      : '<span style="color:#5a8a5a">Sin racha</span>'}`;
+  document.getElementById('pmax').textContent = fmt(capitalInicial);
+
+  // Alerta MG
+  const alertEl = document.getElementById('alerta-mg');
+  if(numMG>0){
+    alertEl.style.display='block';
+    document.getElementById('mg-titulo').textContent=`Martingala n=${numMG}`;
+    document.getElementById('mg-perdida').textContent=fmt(racha);
+  } else alertEl.style.display='none';
+
+  // Próxima apuesta
+  document.getElementById('prox-ap').textContent = fmt(info.ap);
+  document.getElementById('prox-meta').textContent = `AM ${fmt(info.AM)} · %AP ${S.pctAP}% · Cuota ref ${cuotaRef}`;
+  const ganEl = document.getElementById('prox-gan');
+  ganEl.textContent = fmtSign(info.ganNeta);
+  ganEl.style.color = info.ganNeta>0?'var(--accent)':'var(--danger2)';
+  const tipoEl = document.getElementById('prox-tipo');
+  tipoEl.textContent = numMG>0?`MG n=${numMG}`:'Normal';
+  tipoEl.className = 'tag '+(numMG>0?'tag-mg':'tag-ok');
+
+  // Área partidos
+  const activos = partidos.filter(p=>['programado','apostado'].includes(p.estado));
+  const areaEl = document.getElementById('area-partidos');
+
+  if(activos.length===0){
+    areaEl.innerHTML=`<button class="btn-p mb12" style="padding:15px;font-size:14px" onclick="openSheet('sh-nuevo')">+ Nuevo partido</button>`;
+  } else {
+    let html = '';
+    activos.forEach((p,i)=>{
+      const estadoTag = p.estado==='apostado'
+        ? `<span class="tag tag-pendiente">En juego</span>`
+        : `<span class="tag tag-programado">Programado</span>`;
+      const apuestaRow = p.estado==='apostado'
+        ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">Apuesta: <b style="color:var(--text)">${fmt(p.apuesta)}</b> · A: <span style="color:var(--accent)">${p.apuestaA}</span> · Cuota ${p.cuota}</div>`
+        : '';
+      const horaRow = p.hora ? `<span style="color:#4a4a6a"> · ${p.hora}</span>` : '';
+      const btnRes = p.estado==='apostado'
+        ? `<button class="btn-p mt8" style="padding:10px;font-size:11px" onclick="abrirResultado(${p.id})">Registrar resultado</button>` : '';
+      html += `
+        <div class="card mb10" style="border-color:#2a2a10">
+          <div class="fb mb8">
+            <div style="flex:1;margin-right:8px">
+              <div style="font-size:15px;font-weight:500">${p.local} <span style="color:#3a3a5a">vs</span> ${p.visitante}</div>
+              <div style="font-size:10px;color:#4a4a6a;margin-top:2px">${p.fecha}${horaRow} · ${p.liga||''}</div>
+              ${apuestaRow}
+            </div>
+            ${estadoTag}
+          </div>
+          ${p.estado==='programado' ? `
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Para apostar: <code style="color:var(--accent)">/apostar ${i+1} [equipo] [cuota]</code></div>
+            <button class="btn-s" style="font-size:11px;padding:8px;width:100%" onclick="abrirApostarForm(${p.id})">Registrar apuesta</button>
+          ` : btnRes}
+        </div>`;
+    });
+    html += `<button class="btn-s mb12" style="width:100%;padding:10px;font-size:11px" onclick="openSheet('sh-nuevo')">+ Agregar partido</button>`;
+    areaEl.innerHTML = html;
+  }
+
+  // Stats
+  const jugados = partidos.filter(p=>['ganado','perdido'].includes(p.estado));
+  const ganaCount = jugados.filter(p=>p.estado==='ganado').length;
+  document.getElementById('s-gan').textContent = ganaCount;
+  document.getElementById('s-jug').textContent = jugados.length;
+  document.getElementById('s-ef').textContent  = jugados.length ? Math.round(ganaCount/jugados.length*100)+'%':'—';
+  const neto = jugados.reduce((s,p)=>s+(p.ganNeta||0),0);
+  const netoEl = document.getElementById('s-neto');
+  netoEl.textContent = fmtSign(neto);
+  netoEl.style.color = neto>=0?'var(--accent)':'var(--danger2)';
+}
+
+// ── NUEVO PARTIDO ─────────────────────────────────────────────────────────────
+function initNuevoForm(){
+  document.getElementById('f-local').value='';
+  document.getElementById('f-visit').value='';
+  document.getElementById('f-cuota').value='';
+  document.getElementById('f-fecha').value=nowDate();
+  document.getElementById('f-hora').value=nowTime();
+  document.getElementById('f-apuesta-a').innerHTML='<option value="">Seleccionar...</option>';
+  document.getElementById('prev-box').classList.remove('vis');
+}
+function updSelEquipo(){
+  const local=document.getElementById('f-local').value.trim();
+  const visit=document.getElementById('f-visit').value.trim();
+  const sel=document.getElementById('f-apuesta-a');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Seleccionar...</option>';
+  if(local) sel.innerHTML+=`<option value="${local}">${local}</option>`;
+  if(visit) sel.innerHTML+=`<option value="${visit}">${visit}</option>`;
+  sel.innerHTML+=`<option value="Empate">Empate</option>`;
+  if(cur) sel.value=cur;
+}
+function updPreview(){
+  const c=parseFloat(document.getElementById('f-cuota').value.replace(',','.'));
+  const box=document.getElementById('prev-box');
+  if(isNaN(c)||c<=1){box.classList.remove('vis');return;}
+  const info=calcApuesta(c);
+  document.getElementById('prev-ap').textContent=fmt(info.ap);
+  const gEl=document.getElementById('prev-gan');
+  gEl.textContent=fmtSign(info.ganNeta);
+  gEl.style.color=info.ganNeta>=0?'var(--accent2)':'var(--danger2)';
+  box.classList.add('vis');
+}
+function registrarPartido(){
+  const local=document.getElementById('f-local').value.trim();
+  const visit=document.getElementById('f-visit').value.trim();
+  const apuestaA=document.getElementById('f-apuesta-a').value;
+  const cuotaStr=document.getElementById('f-cuota').value.replace(',','.');
+  const fecha=document.getElementById('f-fecha').value;
+  const hora=document.getElementById('f-hora').value;
+  const cuota=parseFloat(cuotaStr);
+  if(!local||!visit||!apuestaA||isNaN(cuota)||cuota<=1){toast('Completa todos los campos','err');return;}
+  const info=calcApuesta(cuota);
+  const p={
+    id:Date.now(), local, visitante:visit, apuestaA, cuota, fecha, hora,
+    apuesta:info.ap, AM:info.AM, ganNetaEsp:info.ganNeta,
+    tipoApuesta: S.numMG===0?'Normal':`MG n=${S.numMG}`,
+    numMG:S.numMG, perdidaAcumAlApostar:S.racha,
+    estado:'apostado', timestamp:new Date().toISOString(),
+    liga:'', marcador:null, ganancia:null, ganNeta:null,
+  };
+  S.partidos.push(p);
+  saveS();
+  closeSheet('sh-nuevo');
+  renderMain();
+  toast(`Partido registrado · Apuesta: ${fmt(p.apuesta)}`);
+}
+
+// ── APOSTAR DESDE FORM (partidos programados) ─────────────────────────────────
+function abrirApostarForm(id){
+  const p = S.partidos.find(x=>x.id===id);
+  if(!p) return;
+  // Reutilizamos el sheet de nuevo partido pero sólo para cuota y equipo
+  document.getElementById('f-local').value = p.local;
+  document.getElementById('f-visit').value = p.visitante;
+  document.getElementById('f-fecha').value = p.fecha;
+  document.getElementById('f-hora').value  = p.hora||'';
+  updSelEquipo();
+  document.getElementById('f-cuota').value = '';
+  document.getElementById('prev-box').classList.remove('vis');
+  openSheet('sh-nuevo');
+  // Override del botón
+  document.querySelector('#sh-nuevo .btn-p').onclick = ()=>confirmarApuesta(id);
+}
+function confirmarApuesta(id){
+  const cuotaStr=document.getElementById('f-cuota').value.replace(',','.');
+  const apuestaA=document.getElementById('f-apuesta-a').value;
+  const cuota=parseFloat(cuotaStr);
+  if(!apuestaA||isNaN(cuota)||cuota<=1){toast('Indica equipo y cuota','err');return;}
+  const info=calcApuesta(cuota);
+  const idx=S.partidos.findIndex(x=>x.id===id);
+  S.partidos[idx]={
+    ...S.partidos[idx], apuestaA, cuota,
+    apuesta:info.ap, AM:info.AM, ganNetaEsp:info.ganNeta,
+    tipoApuesta:S.numMG===0?'Normal':`MG n=${S.numMG}`,
+    numMG:S.numMG, perdidaAcumAlApostar:S.racha,
+    estado:'apostado',
+  };
+  saveS();
+  closeSheet('sh-nuevo');
+  // Restablecer botón
+  document.querySelector('#sh-nuevo .btn-p').onclick = registrarPartido;
+  renderMain();
+  toast(`Apuesta registrada · ${fmt(info.ap)}`);
+}
+
+// ── RESULTADO ─────────────────────────────────────────────────────────────────
+function abrirResultado(id){
+  resPartidoActual=S.partidos.find(p=>p.id===id);
+  if(!resPartidoActual) return;
+  const p=resPartidoActual;
+  document.getElementById('res-titulo').innerHTML=`${p.local} <span style="color:var(--accent)">vs</span> ${p.visitante}`;
+  document.getElementById('lbl-gl').textContent=`Goles ${p.local}`;
+  document.getElementById('lbl-gv').textContent=`Goles ${p.visitante}`;
+  document.getElementById('r-gl').value=0;
+  document.getElementById('r-gv').value=0;
+  selRes('ganado');
+  openSheet('sh-resultado');
+}
+function selRes(r){
+  resSeleccionado=r;
+  document.getElementById('btn-gane').className='btn-res'+(r==='ganado'?' sel-win':'');
+  document.getElementById('btn-perdi').className='btn-res'+(r==='perdido'?' sel-lose':'');
+  const ganBox=document.getElementById('res-gan-box');
+  if(r==='ganado'&&resPartidoActual){
+    const gan=Math.round(resPartidoActual.apuesta*(resPartidoActual.cuota-1));
+    const neto=gan-resPartidoActual.perdidaAcumAlApostar;
+    document.getElementById('res-gan-val').textContent=fmtSign(neto);
+    ganBox.style.display='block';
+  } else ganBox.style.display='none';
+}
+function confirmarResultado(){
+  if(!resPartidoActual) return;
+  const p=resPartidoActual;
+  const gano=resSeleccionado==='ganado';
+  const gl=document.getElementById('r-gl').value;
+  const gv=document.getElementById('r-gv').value;
+  const ganancia=gano?Math.round(p.apuesta*(p.cuota-1)):0;
+  const ganNeta=ganancia-p.perdidaAcumAlApostar;
+  const idx=S.partidos.findIndex(x=>x.id===p.id);
+  S.partidos[idx]={...S.partidos[idx], estado:gano?'ganado':'perdido',
+    marcador:`${gl||'?'}-${gv||'?'}`, ganancia, ganNeta};
+  if(gano){
+    S.capital+=ganancia; S.racha=0; S.numMG=0;
+    toast(`¡Ganaste! Neto: ${fmtSign(ganNeta)}`);
+  } else {
+    S.capital-=p.apuesta; S.racha+=p.apuesta; S.numMG++;
+    toast(`Perdiste. MG n=${S.numMG} activa`,'err');
+  }
+  saveS();
+  closeSheet('sh-resultado');
+  renderMain();
+}
+
+// ── HISTORIAL ─────────────────────────────────────────────────────────────────
+function renderHist(){
+  const lista=document.getElementById('hist-lista');
+  const ps=[...S.partidos].reverse();
+  if(!ps.length){lista.innerHTML='<div style="color:var(--muted);text-align:center;padding:48px 0;font-size:12px">Sin partidos</div>';return;}
+  lista.innerHTML=ps.map(p=>{
+    const hora=p.hora?` · ${p.hora}`:'';
+    const res=p.estado!=='programado'&&p.estado!=='apostado'
+      ? `<span style="font-weight:500;font-size:12px;color:${p.estado==='ganado'?'var(--accent)':'var(--danger2)'}">
+           ${p.estado==='ganado'?fmtSign(p.ganNeta):'-'+fmt(p.apuesta)}
+           ${p.marcador?`<span style="color:#3a3a5a;margin-left:5px">[${p.marcador}]</span>`:''}
+         </span>` : '';
+    return `<div class="hist-item">
+      <div class="fb mb8">
+        <div style="flex:1;margin-right:8px">
+          <div style="font-size:13px;font-weight:500">${p.local} <span style="color:#3a3a5a">vs</span> ${p.visitante}</div>
+          <div style="font-size:10px;color:#3a3a5a;margin-top:2px">${p.fecha}${hora} · ${p.apuestaA||'sin apuesta'} · ×${p.cuota||'—'}</div>
+        </div>
+        <span class="tag tag-${p.estado}">${p.estado}</span>
+      </div>
+      <div class="fb" style="font-size:12px">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span class="tag ${p.numMG>0?'tag-mg':'tag-ok'}" style="font-size:9px">${p.tipoApuesta||'—'}</span>
+          <span style="color:var(--muted)">${p.apuesta?fmt(p.apuesta):'—'}</span>
+        </div>
+        ${res}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── MOVIMIENTOS DE CAPITAL ────────────────────────────────────────────────────
+function initMovForm(){
+  selTipoMov('ingreso');
+  document.getElementById('mov-monto').value='';
+  document.getElementById('mov-desc').value='';
+  document.getElementById('mov-fecha').value=nowDate();
+  document.getElementById('mov-hora').value=nowTime();
+}
+function selTipoMov(tipo){
+  tipoMovActual=tipo;
+  document.getElementById('tipo-ing').className='tipo-btn'+(tipo==='ingreso'?' sel-ing':'');
+  document.getElementById('tipo-egr').className='tipo-btn'+(tipo==='egreso'?' sel-egr':'');
+}
+function confirmarMovimiento(){
+  const monto=parseInt(document.getElementById('mov-monto').value);
+  const desc=document.getElementById('mov-desc').value.trim();
+  const fecha=document.getElementById('mov-fecha').value;
+  const hora=document.getElementById('mov-hora').value;
+  if(!monto||monto<=0){toast('Monto inválido','err');return;}
+  const esIngreso=tipoMovActual==='ingreso';
+  if(!esIngreso && monto>S.capital){toast('El egreso supera el capital disponible','err');return;}
+  S.capital += esIngreso ? monto : -monto;
+  S.movimientos.push({
+    tipo:tipoMovActual, monto, descripcion:desc,
+    fecha, hora, timestamp:new Date().toISOString()
+  });
+  saveS();
+  document.getElementById('mov-monto').value='';
+  document.getElementById('mov-desc').value='';
+  closeSheet('sh-movimiento');
+  renderMain();
+  renderCap();
+  toast(`${esIngreso?'Ingreso':'Egreso'}: ${esIngreso?'+':'-'}${fmt(monto)}`);
+}
+function renderCap(){
+  const { capital, capitalInicial, movimientos } = S;
+  document.getElementById('cap-actual').textContent=fmt(capital);
+  document.getElementById('cap-actual').style.color=capital>=capitalInicial?'var(--accent)':'var(--danger)';
+  document.getElementById('cap-ini-disp').textContent=fmt(capitalInicial);
+  const vari=capital-capitalInicial;
+  const varEl=document.getElementById('cap-var');
+  varEl.textContent=fmtSign(vari);
+  varEl.style.color=vari>=0?'var(--accent)':'var(--danger)';
+  const balMov=movimientos.reduce((s,m)=>m.tipo==='ingreso'?s+m.monto:s-m.monto,0);
+  const movEl=document.getElementById('cap-movs');
+  movEl.textContent=fmtSign(balMov);
+  movEl.style.color=balMov>=0?'var(--purple)':'var(--danger2)';
+
+  const listaEl=document.getElementById('movs-lista');
+  if(!movimientos.length){listaEl.innerHTML='';return;}
+  listaEl.innerHTML=`<div class="lbl mb8">Movimientos registrados</div>`+
+    [...movimientos].reverse().map(m=>`
+      <div class="mov-item">
+        <div>
+          <div style="font-size:13px">${m.descripcion||m.tipo}</div>
+          <div style="font-size:10px;color:#3a3a5a">${m.fecha}${m.hora?' · '+m.hora:''}</div>
+        </div>
+        <div class="${m.tipo==='ingreso'?'mov-ing':'mov-egr'}" style="font-weight:500">
+          ${m.tipo==='ingreso'?'+':'-'}${fmt(m.monto)}
+        </div>
+      </div>`).join('');
+}
+
+// ── CONFIG ────────────────────────────────────────────────────────────────────
+function renderCfg(){
+  document.getElementById('cfg-pct').value=S.pctAP.toFixed(2);
+  document.getElementById('cfg-cuota').value=S.cuotaRef;
+  document.getElementById('cfg-cap-ini').value=S.capitalInicial;
+  updPctBtns(); updAmVal(); renderSim();
+}
+function updPctBtns(){
+  document.querySelectorAll('.pct-btn').forEach(btn=>{
+    const v=parseFloat(btn.dataset.v);
+    btn.classList.toggle('sel', Math.abs(v-S.pctAP)<0.001);
+    btn.onclick=()=>{S.pctAP=v;document.getElementById('cfg-pct').value=v.toFixed(2);saveS();updPctBtns();updAmVal();renderSim();renderMain();};
+  });
+}
+function updAmVal(){ document.getElementById('cfg-am-val').textContent=`AM = ${fmt(calcAM())}`; }
+function onPctInput(){ const v=parseFloat(document.getElementById('cfg-pct').value);if(isNaN(v)||v<=0)return;S.pctAP=v;saveS();updPctBtns();updAmVal();renderSim();renderMain(); }
+function onCuotaInput(){ const v=parseFloat(document.getElementById('cfg-cuota').value);if(isNaN(v)||v<=1)return;S.cuotaRef=v;saveS();renderSim();renderMain(); }
+function onCapIniInput(){ const v=parseInt(document.getElementById('cfg-cap-ini').value);if(isNaN(v)||v<=0)return;S.capitalInicial=v;saveS();renderMain(); }
+
+function renderSim(){
+  const { capital, pctAP, cuotaRef } = S;
+  const div=cuotaRef-1;
+  const AM=Math.max(1000,Math.round(capital*pctAP/100));
+  let perdida=0,cap=capital,rows=[];
+  for(let i=0;i<=12;i++){
+    let ap;
+    if(i===0) ap=AM;
+    else { const base=capital*pctAP/100; ap=Math.round(((base*(1+i*0.5))+perdida)/div); }
+    ap=Math.max(ap,1000);
+    if(ap>cap) break;
+    const gn=Math.round(ap*div)-perdida;
+    const mult=i===0?'—':`×${(1+i*0.5).toFixed(1)}`;
+    rows.push({i,ap,gn,perd:perdida,mult,pctCap:(perdida+ap)/capital*100});
+    perdida+=ap; cap-=ap;
+  }
+  document.getElementById('sim-content').innerHTML=`
+    <div style="font-size:10px;color:var(--muted);margin-bottom:8px">AM=${fmt(AM)} · %AP=${pctAP}% · Cuota=${cuotaRef}</div>
+    <div style="overflow-x:auto"><table class="sim-table">
+      <thead><tr>
+        <th style="text-align:left">MG#</th><th>Mult</th><th>Apuesta</th><th>Pérd.Acum</th><th>Gan.neta</th><th>%Cap</th>
+      </tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td style="color:${r.i===0?'var(--muted2)':'var(--danger2)'}">${r.i===0?'Normal':'n='+r.i}</td>
+        <td style="color:var(--muted);text-align:right">${r.mult}</td>
+        <td>${fmt(r.ap)}</td>
+        <td style="color:#4a4a7a">${fmt(r.perd)}</td>
+        <td style="color:${r.gn>=0?'var(--accent)':'var(--danger)'};font-weight:500">${fmtSign(r.gn)}</td>
+        <td style="color:${r.pctCap>50?'var(--danger)':'#4a4a7a'}">${r.pctCap.toFixed(1)}%</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+}
+
+function resetSession(){
+  if(!confirm('¿Resetear toda la sesión? Se borrarán todos los datos.')) return;
+  S={...S,capital:S.capitalInicial,partidos:[],racha:0,numMG:0,movimientos:[]};
+  saveS(); renderMain(); toast('Sesión reseteada');
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+loadS();
+renderMain();
+</script>
+</body>
+</html>
