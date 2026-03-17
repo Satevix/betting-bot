@@ -313,8 +313,7 @@
 
 <script>
 // ── CONFIGURACIÓN ─────────────────────────────────────────────────────────────
-// ⬇ REEMPLAZA ESTA URL CON TU URL DE GOOGLE APPS SCRIPT
-const SHEETS_URL_DEFAULT = 'PEGA_TU_URL_AQUI';
+const SHEETS_URL_DEFAULT = '';
 
 const SK = 'betting_mgr_v3';
 let S = {
@@ -349,12 +348,16 @@ async function processSyncQueue(){
   showSyncIndicator('syncing');
   while(syncQueue.length > 0){
     const {action, data} = syncQueue[0];
+    const url = S.sheetsUrl || SHEETS_URL_DEFAULT;
     try {
-      await fetch(S.sheetsUrl || SHEETS_URL_DEFAULT, {
-        method: 'POST',
+      // Usamos GET con parámetros para evitar CORS con Apps Script
+      const params = new URLSearchParams({
+        action: action,
+        data: JSON.stringify(data)
+      });
+      await fetch(`${url}?${params.toString()}`, {
+        method: 'GET',
         mode: 'no-cors',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({action, data})
       });
       syncQueue.shift();
     } catch(e) {
