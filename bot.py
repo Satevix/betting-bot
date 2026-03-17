@@ -2,7 +2,7 @@
 Betting Manager Bot — Telegram
 pip install python-telegram-bot anthropic requests
 """
-import os, json, re, logging, base64, requests
+import os, json, re, logging, base64, requests, io
 from datetime import datetime
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup,
@@ -69,7 +69,25 @@ def auth(update):
     return AUTHORIZED_USER == 0 or update.effective_user.id == AUTHORIZED_USER
 
 # ── CLAUDE: ANALIZAR IMAGEN ───────────────────────────────────────────────────
+def comprimir_imagen(image_bytes: bytes, max_width=800, quality=60) -> bytes:
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(image_bytes))
+        if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+        if img.width > max_width:
+            ratio = max_width / img.width
+            img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        compressed = buf.getvalue()
+        log.info(f"Imagen: {len(image_bytes)//1024}KB -> {len(compressed)//1024}KB")
+        return compressed
+    except Exception as e:
+        log.warning(f"Compresion fallida: {e}")
+        return image_bytes
+
 def analizar_imagen(image_bytes: bytes) -> list:
+    image_bytes = comprimir_imagen(image_bytes)
     client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
     b64    = base64.standard_b64encode(image_bytes).decode()
     msg    = client.messages.create(
@@ -101,8 +119,9 @@ def menu_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("📋 Partidos"),   KeyboardButton("💰 Capital")],
         [KeyboardButton("🎯 Apostar"),    KeyboardButton("✅ Resultado")],
+        [KeyboardButton("➕ Nuevo partido"), KeyboardButton("📸 Foto BetPlay")],
         [KeyboardButton("⬆ Ingreso"),    KeyboardButton("⬇ Egreso")],
-        [KeyboardButton("⚙ Config"),     KeyboardButton("📸 Analizar foto")],
+        [KeyboardButton("⚙ Config")],
     ], resize_keyboard=True)
 
 def cancelar_keyboard():
@@ -238,8 +257,17 @@ async def handle_menu(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown", reply_markup=menu_keyboard()
         )
 
-    elif texto == "📸 Analizar foto":
-        await u.message.reply_text("📸 Envía la captura de BetPlay.", reply_markup=menu_keyboard())
+    elif texto == "➕ Nuevo partido":
+        ctx.user_data.clear()
+        ctx.user_data["nuevo_manual"] = True
+        ctx.user_data["esperando"]    = "nm_local"
+        await u.message.reply_text(
+            "➕ *Nuevo partido manual*\n\nEscribe el nombre del equipo *local*:",
+            parse_mode="Markdown", reply_markup=cancelar_keyboard()
+        )
+
+    elif texto == "📸 Foto BetPlay":
+        await u.message.reply_text("📸 Envía la captura de BetPlay y extraeré los partidos.", reply_markup=menu_keyboard())
 
     elif texto == "❌ Cancelar":
         ctx.user_data.clear()
@@ -428,6 +456,78 @@ async def handle_texto(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown", reply_markup=cancelar_keyboard()
         )
 
+    # ── Nuevo partido manual ─────────────────────────────────────────────────
+    elif esperando == "nm_local":
+        ctx.user_data["nm_local"]   = texto
+        ctx.user_data["esperando"]  = "nm_visitante"
+        await u.message.reply_text(
+            f"Local: *{texto}*\n\nEscribe el nombre del equipo *visitante*:",
+            parse_mode="Markdown", reply_markup=cancelar_keyboard()
+        )
+
+    elif esperando == "nm_visitante":
+        ctx.user_data["nm_visitante"] = texto
+        ctx.user_data["esperando"]    = "nm_fecha"
+        await u.message.reply_text(
+            f"Visitante: *{texto}*\n\nEscribe la *fecha* del partido\n_(formato: YYYY-MM-DD, ej: 2026-03-20)_\nO escribe `-` para usar la fecha de hoy:",
+            parse_mode="Markdown", reply_markup=cancelar_keyboard()
+        )
+
+    elif esperando == "nm_fecha":
+        fecha = datetime.now().strftime("%Y-%m-%d") if texto == "-" else texto
+        if texto != "-" and not re.match(r'^\d{4}-\d{2}-\d{2}$', texto):
+            await u.message.reply_text("❌ Formato incorrecto. Usa YYYY-MM-DD ej: `2026-03-20` o `-` para hoy:", parse_mode="Markdown"); return
+        ctx.user_data["nm_fecha"]   = fecha
+        ctx.user_data["esperando"]  = "nm_hora"
+        await u.message.reply_text(
+            f"Fecha: *{fecha}*\n\nEscribe la *hora* del partido\n_(formato: HH:MM, ej: 15:30)_\nO escribe `-` para omitir:",
+            parse_mode="Markdown", reply_markup=cancelar_keyboard()
+        )
+
+    elif esperando == "nm_hora":
+        hora = "" if texto == "-" else texto
+        if texto != "-" and not re.match(r'^\d{2}:\d{2}$', texto):
+            await u.message.reply_text("❌ Formato incorrecto. Usa HH:MM ej: `15:30` o `-` para omitir:", parse_mode="Markdown"); return
+        ctx.user_data["nm_hora"]    = hora
+        ctx.user_data["esperando"]  = "nm_liga"
+        await u.message.reply_text(
+            f"Hora: *{hora or 'sin hora'}*\n\nEscribe la *liga o competencia*\n_(ej: Liga BetPlay, Champions)_\nO escribe `-` para omitir:",
+            parse_mode="Markdown", reply_markup=cancelar_keyboard()
+        )
+
+    elif esperando == "nm_liga":
+        liga = "" if texto == "-" else texto
+        # Crear el partido
+        s = load()
+        nuevo = {
+            "id":        int(datetime.now().timestamp()*1000),
+            "local":     ctx.user_data["nm_local"],
+            "visitante": ctx.user_data["nm_visitante"],
+            "fecha":     ctx.user_data["nm_fecha"],
+            "hora":      ctx.user_data["nm_hora"],
+            "liga":      liga,
+            "cuota_l": None, "cuota_e": None, "cuota_v": None,
+            "estado":    "programado",
+            "apuesta_a": None, "cuota": None, "apuesta": None,
+            "marcador":  None, "ganancia": None, "gan_neta": None,
+            "ts_registro": now_ts(),
+        }
+        s["partidos"].append(nuevo)
+        save(s)
+        sheets("registrar_partido", nuevo)
+        ctx.user_data.clear()
+
+        hora_txt  = f" · 🕐 {nuevo['hora']}" if nuevo['hora'] else ""
+        liga_txt  = f" · {nuevo['liga']}"    if nuevo['liga'] else ""
+        num       = len([p for p in s["partidos"] if p["estado"] in ("programado","apostado")])
+        await u.message.reply_text(
+            f"✅ *Partido registrado*\n\n"
+            f"📋 *{nuevo['local']} vs {nuevo['visitante']}*\n"
+            f"📅 {nuevo['fecha']}{hora_txt}{liga_txt}\n\n"
+            f"Toca *🎯 Apostar* para registrar tu apuesta.",
+            parse_mode="Markdown", reply_markup=menu_keyboard()
+        )
+
     # ── Descripción movimiento ────────────────────────────────────────────────
     elif mov_tipo and ctx.user_data.get("mov_monto"):
         desc  = "" if texto == "-" else texto
@@ -540,7 +640,7 @@ def main():
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(
         filters.TEXT & filters.Regex(
-            r'^(📋 Partidos|💰 Capital|🎯 Apostar|✅ Resultado|⬆ Ingreso|⬇ Egreso|⚙ Config|📸 Analizar foto|❌ Cancelar)$'
+            r'^(📋 Partidos|💰 Capital|🎯 Apostar|✅ Resultado|➕ Nuevo partido|📸 Foto BetPlay|⬆ Ingreso|⬇ Egreso|⚙ Config|❌ Cancelar)$'
         ), handle_menu
     ))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_texto))
