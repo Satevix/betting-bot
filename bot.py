@@ -103,7 +103,7 @@ def menu_keyboard():
         [KeyboardButton("🎯 Apostar"),    KeyboardButton("✅ Resultado")],
         [KeyboardButton("⬆ Ingreso"),    KeyboardButton("⬇ Egreso")],
         [KeyboardButton("⚙ Config"),     KeyboardButton("📸 Analizar foto")],
-    ], resize_keyboard=True, persistent=True)
+    ], resize_keyboard=True)
 
 def cancelar_keyboard():
     return ReplyKeyboardMarkup([[KeyboardButton("❌ Cancelar")]], resize_keyboard=True)
