@@ -69,6 +69,7 @@
   .nav-icon{font-size:20px}
   #toast{position:fixed;top:-60px;left:50%;transform:translateX(-50%);z-index:200;padding:11px 22px;font-size:12px;letter-spacing:.04em;max-width:340px;width:92%;text-align:center;transition:top .3s;border-radius:0}
   #toast.show{top:20px}
+  #sync-indicator{position:fixed;top:8px;right:12px;font-size:9px;letter-spacing:.08em;text-transform:uppercase;z-index:300;padding:3px 8px;transition:all .3s}
   hr{border:none;border-top:1px solid var(--border);margin:18px 0}
   .stat-card{background:var(--bg2);border:1px solid var(--border);padding:12px;text-align:center}
   .stat-val{font-family:'Bebas Neue',sans-serif;font-size:24px}
@@ -101,8 +102,8 @@
 <body>
 
 <div id="toast"></div>
+<div id="sync-indicator"></div>
 
-<!-- HEADER -->
 <header>
   <div class="hrow">
     <div>
@@ -122,7 +123,6 @@
   </div>
 </header>
 
-<!-- PAGE: JUGAR -->
 <div class="page active" id="page-jugar">
   <div class="card card-danger mb12" id="alerta-mg" style="display:none">
     <div class="fb">
@@ -136,21 +136,18 @@
       </div>
     </div>
   </div>
-
   <div class="card card-hl shine mb12">
     <div class="lbl" style="margin-bottom:10px">Próxima apuesta sugerida</div>
     <div class="fb" style="align-items:flex-end">
       <div>
         <div class="bebas" style="font-size:34px;color:var(--accent);line-height:1" id="prox-ap">$0</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:5px" id="prox-meta">AM $0 · Cuota ref 1.833</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:5px" id="prox-meta">AM $0 · %AP 0.3%</div>
         <div style="font-size:11px;margin-top:2px">Si ganas: <span id="prox-gan" style="font-weight:500">$0</span></div>
       </div>
       <span class="tag tag-ok" id="prox-tipo">Normal</span>
     </div>
   </div>
-
   <div id="area-partidos"></div>
-
   <div class="g3 mb8">
     <div class="stat-card"><div class="stat-val" style="color:var(--accent)" id="s-gan">0</div><div class="stat-lbl">Ganados</div></div>
     <div class="stat-card"><div class="stat-val" id="s-jug">0</div><div class="stat-lbl">Jugados</div></div>
@@ -165,13 +162,11 @@
   </div>
 </div>
 
-<!-- PAGE: HISTORIAL -->
 <div class="page" id="page-historial">
   <div class="section-title bebas mb12">HISTORIAL</div>
   <div id="hist-lista"><div style="color:var(--muted);text-align:center;padding:48px 0;font-size:12px">Sin partidos registrados</div></div>
 </div>
 
-<!-- PAGE: CAPITAL -->
 <div class="page" id="page-capital">
   <div class="section-title bebas mb12">CAPITAL</div>
   <div class="g2 mb12">
@@ -184,7 +179,6 @@
   <div id="movs-lista"></div>
 </div>
 
-<!-- PAGE: CONFIG -->
 <div class="page" id="page-config">
   <div class="section-title bebas mb12">CONFIGURACIÓN</div>
   <div class="fgroup">
@@ -216,14 +210,19 @@
     <input type="number" id="cfg-cap-ini" step="10000" oninput="onCapIniInput()">
   </div>
   <hr>
+  <div class="fgroup">
+    <span class="lbl">URL Google Sheets (Apps Script)</span>
+    <input type="text" id="cfg-sheets-url" placeholder="https://script.google.com/macros/s/.../exec" oninput="onSheetsUrlInput()">
+    <div class="inline-info" id="sheets-status">Sin configurar</div>
+  </div>
+  <hr>
   <div class="section-title bebas" style="font-size:20px;margin-bottom:10px">SIMULADOR</div>
   <div id="sim-content"></div>
   <hr>
   <button class="btn-danger-full" onclick="resetSession()">Resetear sesión</button>
-  <div style="font-size:9px;color:#3a3a3a;text-align:center;margin-top:8px;letter-spacing:.06em">Datos guardados automáticamente</div>
+  <div style="font-size:9px;color:#3a3a3a;text-align:center;margin-top:8px;letter-spacing:.06em">Datos guardados localmente y en Google Sheets</div>
 </div>
 
-<!-- NAV -->
 <nav class="nav-bar">
   <div class="nav-item active" onclick="goTab('jugar')" id="nav-jugar"><span class="nav-icon">⚽</span><span>Jugar</span></div>
   <div class="nav-item" onclick="goTab('historial')" id="nav-historial"><span class="nav-icon">📋</span><span>Historial</span></div>
@@ -257,7 +256,7 @@
       <span class="lbl">Hora partido</span>
       <input type="time" id="f-hora">
     </div>
-    <button class="btn-p" onclick="registrarPartido()">Registrar partido</button>
+    <button class="btn-p" id="btn-registrar-partido" onclick="registrarPartido()">Registrar partido</button>
   </div>
 </div>
 
@@ -285,7 +284,7 @@
   </div>
 </div>
 
-<!-- SHEET: MOVIMIENTO DE CAPITAL -->
+<!-- SHEET: MOVIMIENTO -->
 <div class="overlay" id="sh-movimiento">
   <div class="sheet">
     <div class="fb mb16"><div class="sh-title bebas">MOVIMIENTO</div><button class="sh-close" onclick="closeSheet('sh-movimiento')">✕</button></div>
@@ -313,36 +312,80 @@
 </div>
 
 <script>
-// ── STORAGE KEY ───────────────────────────────────────────────────────────────
+// ── CONFIGURACIÓN ─────────────────────────────────────────────────────────────
+// ⬇ REEMPLAZA ESTA URL CON TU URL DE GOOGLE APPS SCRIPT
+const SHEETS_URL_DEFAULT = 'PEGA_TU_URL_AQUI';
+
 const SK = 'betting_mgr_v3';
-const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzjeKEh5qk3eaCgZ6GRYRWXYbd9e_LWkPzPGaFnPvbDSSrZX5BCPbYC7DY4KuvnXa_Aew/exec';
 let S = {
   capital: 1_000_000, capitalInicial: 1_000_000,
-  pctAP: 0.3,           // porcentaje (no decimal), e.g. 0.3 = 0.3%
-  cuotaRef: 1.833,
-  partidos: [],
-  racha: 0, numMG: 0,
-  movimientos: [],      // ingresos y egresos
+  pctAP: 0.3, cuotaRef: 1.833,
+  sheetsUrl: SHEETS_URL_DEFAULT,
+  partidos: [], racha: 0, numMG: 0,
+  movimientos: [],
 };
 let resPartidoActual = null;
 let resSeleccionado  = 'ganado';
 let tipoMovActual    = 'ingreso';
 
-function loadS(){try{const r=localStorage.getItem(SK);if(r)S={...S,...JSON.parse(r)}}catch(e){}}
-function saveS(){
-  try{localStorage.setItem(SK,JSON.stringify(S))}catch(e){}
-}
+// ── STORAGE ───────────────────────────────────────────────────────────────────
+function loadS(){ try{ const r=localStorage.getItem(SK); if(r) S={...S,...JSON.parse(r)}; }catch(e){} }
+function saveS(){ try{ localStorage.setItem(SK,JSON.stringify(S)); }catch(e){} }
+
+// ── GOOGLE SHEETS SYNC ────────────────────────────────────────────────────────
+let syncQueue = [];
+let syncing   = false;
+
 function syncSheets(action, data){
-  if(!SHEETS_URL) return;
-  fetch(SHEETS_URL, {
-    method:'POST',
-    body: JSON.stringify({action, data}),
-  }).catch(e=>console.log('Sheets sync error:',e));
+  const url = S.sheetsUrl || SHEETS_URL_DEFAULT;
+  if(!url || url === 'PEGA_TU_URL_AQUI') return;
+  syncQueue.push({action, data});
+  processSyncQueue();
+}
+
+async function processSyncQueue(){
+  if(syncing || syncQueue.length === 0) return;
+  syncing = true;
+  showSyncIndicator('syncing');
+  while(syncQueue.length > 0){
+    const {action, data} = syncQueue[0];
+    try {
+      await fetch(S.sheetsUrl || SHEETS_URL_DEFAULT, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action, data})
+      });
+      syncQueue.shift();
+    } catch(e) {
+      console.error('Sheets sync error:', e);
+      break;
+    }
+  }
+  syncing = false;
+  showSyncIndicator(syncQueue.length === 0 ? 'ok' : 'error');
+}
+
+function showSyncIndicator(state){
+  const el = document.getElementById('sync-indicator');
+  if(state === 'syncing'){
+    el.textContent = '⟳ Sheets';
+    el.style.color = 'var(--warn)';
+    el.style.background = 'rgba(245,212,66,.1)';
+  } else if(state === 'ok'){
+    el.textContent = '✓ Sheets';
+    el.style.color = 'var(--accent)';
+    el.style.background = 'rgba(200,245,66,.1)';
+    setTimeout(()=>{ el.textContent=''; el.style.background='transparent'; }, 3000);
+  } else {
+    el.textContent = '✗ Sheets';
+    el.style.color = 'var(--danger)';
+    el.style.background = 'rgba(255,64,64,.1)';
+  }
 }
 
 // ── FÓRMULA ───────────────────────────────────────────────────────────────────
 function calcAM(){ return Math.max(1000, Math.round(S.capital * S.pctAP / 100)); }
-
 function calcApuesta(cuota){
   const AM  = calcAM();
   const div = cuota - 1;
@@ -358,16 +401,15 @@ function calcApuesta(cuota){
   return { ap, AM, ganNeta };
 }
 
-// ── FORMAT ────────────────────────────────────────────────────────────────────
+// ── HELPERS ───────────────────────────────────────────────────────────────────
 function fmt(n){ return '$'+Math.abs(Math.round(n)).toLocaleString('es-CO'); }
 function fmtSign(n){ return (n>=0?'+':'-')+fmt(n); }
 function nowDate(){ return new Date().toISOString().split('T')[0]; }
 function nowTime(){ return new Date().toTimeString().slice(0,5); }
-function fmtDT(fecha,hora){ return fecha+(hora?' '+hora:''); }
 
 // ── TOAST ─────────────────────────────────────────────────────────────────────
 let toastT;
-function toast(msg,type='ok'){
+function toast(msg, type='ok'){
   const el=document.getElementById('toast');
   el.textContent=msg;
   el.style.background=type==='err'?'#2a0a0a':'#0a2a0a';
@@ -402,11 +444,10 @@ document.querySelectorAll('.overlay').forEach(el=>{
 
 // ── RENDER MAIN ───────────────────────────────────────────────────────────────
 function renderMain(){
-  const { capital, capitalInicial, numMG, racha, cuotaRef, partidos } = S;
+  const { capital, capitalInicial, numMG, racha, cuotaRef, partidos, pctAP } = S;
   const pct = Math.max(0,Math.min(100, capital/capitalInicial*100));
   const info = calcApuesta(cuotaRef);
 
-  // Header
   const capEl = document.getElementById('hdr-capital');
   capEl.textContent = fmt(capital);
   capEl.style.color = capital < capitalInicial*0.5 ? 'var(--danger)' : 'var(--accent)';
@@ -417,7 +458,6 @@ function renderMain(){
       : '<span style="color:#5a8a5a">Sin racha</span>'}`;
   document.getElementById('pmax').textContent = fmt(capitalInicial);
 
-  // Alerta MG
   const alertEl = document.getElementById('alerta-mg');
   if(numMG>0){
     alertEl.style.display='block';
@@ -425,9 +465,8 @@ function renderMain(){
     document.getElementById('mg-perdida').textContent=fmt(racha);
   } else alertEl.style.display='none';
 
-  // Próxima apuesta
   document.getElementById('prox-ap').textContent = fmt(info.ap);
-  document.getElementById('prox-meta').textContent = `AM ${fmt(info.AM)} · %AP ${S.pctAP}% · Cuota ref ${cuotaRef}`;
+  document.getElementById('prox-meta').textContent = `AM ${fmt(info.AM)} · %AP ${pctAP}% · Cuota ref ${cuotaRef}`;
   const ganEl = document.getElementById('prox-gan');
   ganEl.textContent = fmtSign(info.ganNeta);
   ganEl.style.color = info.ganNeta>0?'var(--accent)':'var(--danger2)';
@@ -435,14 +474,13 @@ function renderMain(){
   tipoEl.textContent = numMG>0?`MG n=${numMG}`:'Normal';
   tipoEl.className = 'tag '+(numMG>0?'tag-mg':'tag-ok');
 
-  // Área partidos
   const activos = partidos.filter(p=>['programado','apostado'].includes(p.estado));
-  const areaEl = document.getElementById('area-partidos');
+  const areaEl  = document.getElementById('area-partidos');
 
   if(activos.length===0){
     areaEl.innerHTML=`<button class="btn-p mb12" style="padding:15px;font-size:14px" onclick="openSheet('sh-nuevo')">+ Nuevo partido</button>`;
   } else {
-    let html = '';
+    let html='';
     activos.forEach((p,i)=>{
       const estadoTag = p.estado==='apostado'
         ? `<span class="tag tag-pendiente">En juego</span>`
@@ -450,35 +488,32 @@ function renderMain(){
       const apuestaRow = p.estado==='apostado'
         ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">Apuesta: <b style="color:var(--text)">${fmt(p.apuesta)}</b> · A: <span style="color:var(--accent)">${p.apuestaA}</span> · Cuota ${p.cuota}</div>`
         : '';
-      const horaRow = p.hora ? `<span style="color:#4a4a6a"> · ${p.hora}</span>` : '';
-      const btnRes = p.estado==='apostado'
-        ? `<button class="btn-p mt8" style="padding:10px;font-size:11px" onclick="abrirResultado(${p.id})">Registrar resultado</button>` : '';
-      html += `
+      const horaRow = p.hora?`<span style="color:#4a4a6a"> · ${p.hora}</span>`:'';
+      const btnAcc = p.estado==='apostado'
+        ? `<button class="btn-p mt8" style="padding:10px;font-size:11px" onclick="abrirResultado(${p.id})">Registrar resultado</button>`
+        : `<button class="btn-s" style="font-size:11px;padding:8px;width:100%;margin-top:8px" onclick="abrirApostarForm(${p.id})">Registrar apuesta</button>`;
+      html+=`
         <div class="card mb10" style="border-color:#2a2a10">
           <div class="fb mb8">
             <div style="flex:1;margin-right:8px">
               <div style="font-size:15px;font-weight:500">${p.local} <span style="color:#3a3a5a">vs</span> ${p.visitante}</div>
-              <div style="font-size:10px;color:#4a4a6a;margin-top:2px">${p.fecha}${horaRow} · ${p.liga||''}</div>
+              <div style="font-size:10px;color:#4a4a6a;margin-top:2px">${p.fecha}${horaRow}</div>
               ${apuestaRow}
             </div>
             ${estadoTag}
           </div>
-          ${p.estado==='programado' ? `
-            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Para apostar: <code style="color:var(--accent)">/apostar ${i+1} [equipo] [cuota]</code></div>
-            <button class="btn-s" style="font-size:11px;padding:8px;width:100%" onclick="abrirApostarForm(${p.id})">Registrar apuesta</button>
-          ` : btnRes}
+          ${btnAcc}
         </div>`;
     });
-    html += `<button class="btn-s mb12" style="width:100%;padding:10px;font-size:11px" onclick="openSheet('sh-nuevo')">+ Agregar partido</button>`;
-    areaEl.innerHTML = html;
+    html+=`<button class="btn-s mb12" style="width:100%;padding:10px;font-size:11px" onclick="openSheet('sh-nuevo')">+ Agregar partido</button>`;
+    areaEl.innerHTML=html;
   }
 
-  // Stats
-  const jugados = partidos.filter(p=>['ganado','perdido'].includes(p.estado));
+  const jugados   = partidos.filter(p=>['ganado','perdido'].includes(p.estado));
   const ganaCount = jugados.filter(p=>p.estado==='ganado').length;
   document.getElementById('s-gan').textContent = ganaCount;
   document.getElementById('s-jug').textContent = jugados.length;
-  document.getElementById('s-ef').textContent  = jugados.length ? Math.round(ganaCount/jugados.length*100)+'%':'—';
+  document.getElementById('s-ef').textContent  = jugados.length?Math.round(ganaCount/jugados.length*100)+'%':'—';
   const neto = jugados.reduce((s,p)=>s+(p.ganNeta||0),0);
   const netoEl = document.getElementById('s-neto');
   netoEl.textContent = fmtSign(neto);
@@ -494,6 +529,7 @@ function initNuevoForm(){
   document.getElementById('f-hora').value=nowTime();
   document.getElementById('f-apuesta-a').innerHTML='<option value="">Seleccionar...</option>';
   document.getElementById('prev-box').classList.remove('vis');
+  document.getElementById('btn-registrar-partido').onclick=registrarPartido;
 }
 function updSelEquipo(){
   const local=document.getElementById('f-local').value.trim();
@@ -537,27 +573,30 @@ function registrarPartido(){
   };
   S.partidos.push(p);
   saveS();
+  // Sync Google Sheets
   syncSheets('registrar_partido', p);
+  syncSheets('actualizar_capital', {
+    capital:S.capital, racha:S.racha, num_mg:S.numMG,
+    ts:new Date().toISOString(), evento:'nuevo_partido'
+  });
   closeSheet('sh-nuevo');
   renderMain();
   toast(`Partido registrado · Apuesta: ${fmt(p.apuesta)}`);
 }
 
-// ── APOSTAR DESDE FORM (partidos programados) ─────────────────────────────────
+// ── APOSTAR DESDE FORM ────────────────────────────────────────────────────────
 function abrirApostarForm(id){
-  const p = S.partidos.find(x=>x.id===id);
+  const p=S.partidos.find(x=>x.id===id);
   if(!p) return;
-  // Reutilizamos el sheet de nuevo partido pero sólo para cuota y equipo
-  document.getElementById('f-local').value = p.local;
-  document.getElementById('f-visit').value = p.visitante;
-  document.getElementById('f-fecha').value = p.fecha;
-  document.getElementById('f-hora').value  = p.hora||'';
+  document.getElementById('f-local').value=p.local;
+  document.getElementById('f-visit').value=p.visitante;
+  document.getElementById('f-fecha').value=p.fecha;
+  document.getElementById('f-hora').value=p.hora||'';
   updSelEquipo();
-  document.getElementById('f-cuota').value = '';
+  document.getElementById('f-cuota').value='';
   document.getElementById('prev-box').classList.remove('vis');
   openSheet('sh-nuevo');
-  // Override del botón
-  document.querySelector('#sh-nuevo .btn-p').onclick = ()=>confirmarApuesta(id);
+  document.getElementById('btn-registrar-partido').onclick=()=>confirmarApuesta(id);
 }
 function confirmarApuesta(id){
   const cuotaStr=document.getElementById('f-cuota').value.replace(',','.');
@@ -574,9 +613,9 @@ function confirmarApuesta(id){
     estado:'apostado',
   };
   saveS();
+  syncSheets('actualizar_partido', S.partidos[idx]);
   closeSheet('sh-nuevo');
-  // Restablecer botón
-  document.querySelector('#sh-nuevo .btn-p').onclick = registrarPartido;
+  document.getElementById('btn-registrar-partido').onclick=registrarPartido;
   renderMain();
   toast(`Apuesta registrada · ${fmt(info.ap)}`);
 }
@@ -615,8 +654,11 @@ function confirmarResultado(){
   const ganancia=gano?Math.round(p.apuesta*(p.cuota-1)):0;
   const ganNeta=ganancia-p.perdidaAcumAlApostar;
   const idx=S.partidos.findIndex(x=>x.id===p.id);
-  S.partidos[idx]={...S.partidos[idx], estado:gano?'ganado':'perdido',
-    marcador:`${gl||'?'}-${gv||'?'}`, ganancia, ganNeta};
+  S.partidos[idx]={...S.partidos[idx],
+    estado:gano?'ganado':'perdido',
+    marcador:`${gl||'?'}-${gv||'?'}`,
+    ganancia, ganNeta
+  };
   if(gano){
     S.capital+=ganancia; S.racha=0; S.numMG=0;
     toast(`¡Ganaste! Neto: ${fmtSign(ganNeta)}`);
@@ -625,8 +667,13 @@ function confirmarResultado(){
     toast(`Perdiste. MG n=${S.numMG} activa`,'err');
   }
   saveS();
-  syncSheets('actualizar_partido', S.partidos.find(x=>x.id===p.id));
-syncSheets('actualizar_capital', {capital:S.capital, racha:S.racha, num_mg:S.numMG, ts:new Date().toISOString()});
+  // Sync Google Sheets
+  syncSheets('actualizar_partido', S.partidos[idx]);
+  syncSheets('actualizar_capital', {
+    capital:S.capital, racha:S.racha, num_mg:S.numMG,
+    ts:new Date().toISOString(),
+    evento: gano?'partido_ganado':'partido_perdido'
+  });
   closeSheet('sh-resultado');
   renderMain();
 }
@@ -639,10 +686,10 @@ function renderHist(){
   lista.innerHTML=ps.map(p=>{
     const hora=p.hora?` · ${p.hora}`:'';
     const res=p.estado!=='programado'&&p.estado!=='apostado'
-      ? `<span style="font-weight:500;font-size:12px;color:${p.estado==='ganado'?'var(--accent)':'var(--danger2)'}">
-           ${p.estado==='ganado'?fmtSign(p.ganNeta):'-'+fmt(p.apuesta)}
-           ${p.marcador?`<span style="color:#3a3a5a;margin-left:5px">[${p.marcador}]</span>`:''}
-         </span>` : '';
+      ?`<span style="font-weight:500;font-size:12px;color:${p.estado==='ganado'?'var(--accent)':'var(--danger2)'}">
+          ${p.estado==='ganado'?fmtSign(p.ganNeta):'-'+fmt(p.apuesta)}
+          ${p.marcador?`<span style="color:#3a3a5a;margin-left:5px">[${p.marcador}]</span>`:''}
+        </span>`:'' ;
     return `<div class="hist-item">
       <div class="fb mb8">
         <div style="flex:1;margin-right:8px">
@@ -662,7 +709,7 @@ function renderHist(){
   }).join('');
 }
 
-// ── MOVIMIENTOS DE CAPITAL ────────────────────────────────────────────────────
+// ── CAPITAL ───────────────────────────────────────────────────────────────────
 function initMovForm(){
   selTipoMov('ingreso');
   document.getElementById('mov-monto').value='';
@@ -681,22 +728,22 @@ function confirmarMovimiento(){
   const fecha=document.getElementById('mov-fecha').value;
   const hora=document.getElementById('mov-hora').value;
   if(!monto||monto<=0){toast('Monto inválido','err');return;}
-  const esIngreso=tipoMovActual==='ingreso';
-  if(!esIngreso && monto>S.capital){toast('El egreso supera el capital disponible','err');return;}
-  S.capital += esIngreso ? monto : -monto;
-  S.movimientos.push({
-    tipo:tipoMovActual, monto, descripcion:desc,
-    fecha, hora, timestamp:new Date().toISOString()
-  });
+  const esIng=tipoMovActual==='ingreso';
+  if(!esIng&&monto>S.capital){toast('El egreso supera el capital','err');return;}
+  S.capital+=esIng?monto:-monto;
+  const mov={tipo:tipoMovActual,monto,descripcion:desc,fecha,hora,timestamp:new Date().toISOString()};
+  S.movimientos.push(mov);
   saveS();
-  const mov = S.movimientos[S.movimientos.length-1];
-  syncSheets('registrar_movimiento', {...mov, capital_resultante: S.capital});
-  document.getElementById('mov-monto').value='';
-  document.getElementById('mov-desc').value='';
+  // Sync Google Sheets
+  syncSheets('registrar_movimiento', {...mov, capital_resultante:S.capital});
+  syncSheets('actualizar_capital', {
+    capital:S.capital, racha:S.racha, num_mg:S.numMG,
+    ts:new Date().toISOString(), evento:tipoMovActual
+  });
   closeSheet('sh-movimiento');
   renderMain();
   renderCap();
-  toast(`${esIngreso?'Ingreso':'Egreso'}: ${esIngreso?'+':'-'}${fmt(monto)}`);
+  toast(`${esIng?'Ingreso':'Egreso'}: ${esIng?'+':'-'}${fmt(monto)}`);
 }
 function renderCap(){
   const { capital, capitalInicial, movimientos } = S;
@@ -707,11 +754,10 @@ function renderCap(){
   const varEl=document.getElementById('cap-var');
   varEl.textContent=fmtSign(vari);
   varEl.style.color=vari>=0?'var(--accent)':'var(--danger)';
-  const balMov=movimientos.reduce((s,m)=>m.tipo==='ingreso'?s+m.monto:s-m.monto,0);
+  const bal=movimientos.reduce((s,m)=>m.tipo==='ingreso'?s+m.monto:s-m.monto,0);
   const movEl=document.getElementById('cap-movs');
-  movEl.textContent=fmtSign(balMov);
-  movEl.style.color=balMov>=0?'var(--purple)':'var(--danger2)';
-
+  movEl.textContent=fmtSign(bal);
+  movEl.style.color=bal>=0?'var(--purple)':'var(--danger2)';
   const listaEl=document.getElementById('movs-lista');
   if(!movimientos.length){listaEl.innerHTML='';return;}
   listaEl.innerHTML=`<div class="lbl mb8">Movimientos registrados</div>`+
@@ -732,12 +778,29 @@ function renderCfg(){
   document.getElementById('cfg-pct').value=S.pctAP.toFixed(2);
   document.getElementById('cfg-cuota').value=S.cuotaRef;
   document.getElementById('cfg-cap-ini').value=S.capitalInicial;
-  updPctBtns(); updAmVal(); renderSim();
+  document.getElementById('cfg-sheets-url').value=S.sheetsUrl||'';
+  updPctBtns(); updAmVal(); renderSim(); updSheetsStatus();
+}
+function updSheetsStatus(){
+  const el=document.getElementById('sheets-status');
+  const url=S.sheetsUrl;
+  if(!url||url==='PEGA_TU_URL_AQUI'){
+    el.textContent='⚠ Sin configurar — los datos no se guardan en Google Sheets';
+    el.style.color='var(--warn)';
+  } else {
+    el.textContent='✓ Configurada — los datos se sincronizan automáticamente';
+    el.style.color='var(--accent)';
+  }
+}
+function onSheetsUrlInput(){
+  const v=document.getElementById('cfg-sheets-url').value.trim();
+  S.sheetsUrl=v;
+  saveS(); updSheetsStatus();
 }
 function updPctBtns(){
   document.querySelectorAll('.pct-btn').forEach(btn=>{
     const v=parseFloat(btn.dataset.v);
-    btn.classList.toggle('sel', Math.abs(v-S.pctAP)<0.001);
+    btn.classList.toggle('sel',Math.abs(v-S.pctAP)<0.001);
     btn.onclick=()=>{S.pctAP=v;document.getElementById('cfg-pct').value=v.toFixed(2);saveS();updPctBtns();updAmVal();renderSim();renderMain();};
   });
 }
