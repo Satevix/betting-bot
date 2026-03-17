@@ -33,12 +33,72 @@ DEFAULT_STATE = {
 }
 
 def load():
+    """Carga estado desde Google Sheets (fuente unica de verdad)."""
+    try:
+        params = {"action": "get_estado", "data": "{}"}
+        r = requests.get(GOOGLE_SHEET_URL, params=params, timeout=15)
+        data = r.json()
+        if data.get("ok") and data.get("estado"):
+            e = data["estado"]
+            # Mapear partidos de Sheets al formato del bot
+            partidos_mapped = []
+            for p in e.get("partidos", []):
+                partidos_mapped.append({
+                    "id":                      int(p.get("id", 0)),
+                    "local":                   p.get("local", ""),
+                    "visitante":               p.get("visitante", ""),
+                    "fecha":                   p.get("fecha", ""),
+                    "hora":                    p.get("hora", ""),
+                    "liga":                    p.get("liga", ""),
+                    "estado":                  p.get("estado", "programado"),
+                    "apuesta_a":               p.get("apuesta_a"),
+                    "cuota":                   p.get("cuota"),
+                    "tipo_apuesta":            p.get("tipo_apuesta"),
+                    "num_mg":                  p.get("num_mg", 0),
+                    "apuesta":                 p.get("apuesta"),
+                    "AM":                      p.get("AM"),
+                    "perdida_acum_al_apostar": p.get("perdida_acum_al_apostar", 0),
+                    "gan_neta_esp":            p.get("gan_neta_esp"),
+                    "marcador":                p.get("marcador"),
+                    "ganancia":                p.get("ganancia"),
+                    "gan_neta":                p.get("gan_neta"),
+                    "ts_registro":             p.get("ts_registro", ""),
+                })
+            movs_mapped = []
+            for m in e.get("movimientos", []):
+                movs_mapped.append({
+                    "tipo":        m.get("tipo", ""),
+                    "monto":       m.get("monto", 0),
+                    "descripcion": m.get("descripcion", ""),
+                    "fecha":       m.get("fecha", ""),
+                    "hora":        m.get("hora", ""),
+                    "ts":          m.get("timestamp", ""),
+                })
+            state = {
+                "capital":          float(e.get("capital",        DEFAULT_STATE["capital"])),
+                "capital_inicial":  float(e.get("capitalInicial", DEFAULT_STATE["capital_inicial"])),
+                "pct_ap":           float(e.get("pctAP",          DEFAULT_STATE["pct_ap"])),
+                "cuota_ref":        float(e.get("cuotaRef",       DEFAULT_STATE["cuota_ref"])),
+                "racha":            float(e.get("racha",          0)),
+                "num_mg":           int(e.get("numMG",            0)),
+                "partidos":         partidos_mapped,
+                "movimientos":      movs_mapped,
+            }
+            # Cache local
+            with open(STATE_FILE, "w") as f: json.dump(state, f, ensure_ascii=False)
+            return state
+    except Exception as e:
+        log.warning(f"No se pudo cargar desde Sheets: {e}. Usando cache local.")
+    # Fallback: cache local
     try:
         with open(STATE_FILE) as f: return {**DEFAULT_STATE, **json.load(f)}
     except: return dict(DEFAULT_STATE)
 
 def save(s):
-    with open(STATE_FILE, "w") as f: json.dump(s, f, ensure_ascii=False, indent=2)
+    """Guarda cache local (los cambios a Sheets se hacen via sheets() en cada accion)."""
+    try:
+        with open(STATE_FILE, "w") as f: json.dump(s, f, ensure_ascii=False, indent=2)
+    except: pass
 
 # ── FÓRMULA ───────────────────────────────────────────────────────────────────
 def calc_am(s):

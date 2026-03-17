@@ -107,7 +107,10 @@
 <header>
   <div class="hrow">
     <div>
-      <div class="hsub">Sistema de apuestas</div>
+      <div class="hsub" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Sistema de apuestas</span>
+      <button onclick="cargarDesdeSheets()" style="background:transparent;border:1px solid #2a2a3a;color:#5a5a7a;font-size:9px;padding:2px 8px;font-family:inherit;cursor:pointer;letter-spacing:.06em" title="Sincronizar con Google Sheets">⟳ SYNC</button>
+    </div>
       <div class="section-title bebas">BETTING MGR</div>
     </div>
     <div style="text-align:right">
@@ -327,9 +330,67 @@ let resPartidoActual = null;
 let resSeleccionado  = 'ganado';
 let tipoMovActual    = 'ingreso';
 
-// ── STORAGE ───────────────────────────────────────────────────────────────────
+// ── STORAGE + SHEETS SYNC ─────────────────────────────────────────────────────
 function loadS(){ try{ const r=localStorage.getItem(SK); if(r) S={...S,...JSON.parse(r)}; }catch(e){} }
 function saveS(){ try{ localStorage.setItem(SK,JSON.stringify(S)); }catch(e){} }
+
+async function cargarDesdeSheets(){
+  const url = S.sheetsUrl || SHEETS_URL_DEFAULT;
+  if(!url || url==='PEGA_TU_URL_AQUI') return;
+  try {
+    showSyncIndicator('syncing');
+    const params = new URLSearchParams({action:'get_estado', data:'{}'});
+    const resp   = await fetch(`${url}?${params}`, {mode:'cors'});
+    const json   = await resp.json();
+    if(json.ok && json.estado){
+      const e = json.estado;
+      S.capital        = e.capital;
+      S.capitalInicial = e.capitalInicial;
+      S.pctAP          = e.pctAP;
+      S.cuotaRef       = e.cuotaRef;
+      S.racha          = e.racha;
+      S.numMG          = e.numMG;
+      // Mapear partidos de Sheets al formato de la app
+      S.partidos = (e.partidos||[]).map(p=>({
+        id:                    parseInt(p.id)||Date.now(),
+        local:                 p.local||'',
+        visitante:             p.visitante||'',
+        fecha:                 p.fecha||'',
+        hora:                  p.hora||'',
+        liga:                  p.liga||'',
+        estado:                p.estado||'programado',
+        apuestaA:              p.apuesta_a||null,
+        cuota:                 p.cuota||null,
+        apuesta:               p.apuesta||null,
+        AM:                    p.AM||null,
+        tipoApuesta:           p.tipo_apuesta||'Normal',
+        numMG:                 p.num_mg||0,
+        perdidaAcumAlApostar:  p.perdida_acum_al_apostar||0,
+        ganNetaEsp:            p.gan_neta_esp||null,
+        marcador:              p.marcador||null,
+        ganancia:              p.ganancia||null,
+        ganNeta:               p.gan_neta||null,
+        timestamp:             p.ts_registro||new Date().toISOString(),
+      }));
+      S.movimientos = (e.movimientos||[]).map(m=>({
+        tipo:        m.tipo||'ingreso',
+        monto:       m.monto||0,
+        descripcion: m.descripcion||'',
+        fecha:       m.fecha||'',
+        hora:        m.hora||'',
+        timestamp:   m.timestamp||new Date().toISOString(),
+      }));
+      saveS();
+      showSyncIndicator('ok');
+      renderMain();
+      if(document.getElementById('page-capital').classList.contains('active')) renderCap();
+      if(document.getElementById('page-historial').classList.contains('active')) renderHist();
+    }
+  } catch(e) {
+    console.error('Error cargando desde Sheets:', e);
+    showSyncIndicator('error');
+  }
+}
 
 // ── GOOGLE SHEETS SYNC ────────────────────────────────────────────────────────
 let syncQueue = [];
@@ -854,6 +915,8 @@ function resetSession(){
 // ── INIT ──────────────────────────────────────────────────────────────────────
 loadS();
 renderMain();
+// Cargar datos frescos de Google Sheets al iniciar
+cargarDesdeSheets();
 </script>
 </body>
 </html>
