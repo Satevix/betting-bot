@@ -390,9 +390,48 @@ async def handle_callback(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     partes = query.data.split(":")
     accion = partes[0]
-    pid    = int(partes[1])
-    s      = load()
-    p      = next((x for x in s["partidos"] if x["id"] == pid), None)
+
+    # ── Callbacks de nuevo partido (no usan pid) ──────────────────────────────
+    if accion == "nm_local":
+        equipo_local = ":".join(partes[1:])  # por si el nombre tiene ":"
+        ctx.user_data["nm_local"] = equipo_local
+        equipos = get_equipos()
+        btns = []
+        fila = []
+        for eq in equipos:
+            if eq == equipo_local: continue
+            fila.append(InlineKeyboardButton(eq, callback_data=f"nm_visitante:{eq}"))
+            if len(fila) == 2:
+                btns.append(fila); fila = []
+        if fila: btns.append(fila)
+        await query.edit_message_text(
+            f"➕ *Nuevo partido*\n\nLocal: *{equipo_local}*\n\n¿Cuál es el equipo *visitante*?",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(btns)
+        )
+        return
+
+    if accion == "nm_visitante":
+        equipo_visit = ":".join(partes[1:])
+        ctx.user_data["nm_visitante"] = equipo_visit
+        ctx.user_data["esperando"]    = "nm_fecha"
+        local = ctx.user_data.get("nm_local", "")
+        await query.edit_message_text(
+            f"➕ *{local} vs {equipo_visit}*\n\n"
+            f"¿Cuál es la *fecha* del partido?\n"
+            f"_(DD/MM/YYYY ej: 20/03/2026 — o `-` para hoy)_",
+            parse_mode="Markdown"
+        )
+        return
+
+    # ── Callbacks de partidos (usan pid numérico) ─────────────────────────────
+    try:
+        pid = int(partes[1])
+    except (ValueError, IndexError):
+        await query.edit_message_text("❌ Acción no reconocida."); return
+
+    s = load()
+    p = next((x for x in s["partidos"] if x["id"] == pid), None)
     if not p:
         await query.edit_message_text("❌ Partido no encontrado."); return
 
@@ -460,37 +499,6 @@ async def handle_callback(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"💵 Apuesta: {fmt(p['apuesta'])} · A: {p['apuesta_a']}\n\n"
             f"¿Cómo terminó?",
             parse_mode="Markdown", reply_markup=btns
-        )
-
-    elif accion == "nm_local":
-        equipo_local = partes[1]
-        ctx.user_data["nm_local"] = equipo_local
-        equipos = get_equipos()
-        # Mostrar botones para visitante (sin el local)
-        btns = []
-        fila = []
-        for eq in equipos:
-            if eq == equipo_local: continue
-            fila.append(InlineKeyboardButton(eq, callback_data=f"nm_visitante:{eq}"))
-            if len(fila) == 2:
-                btns.append(fila); fila = []
-        if fila: btns.append(fila)
-        await query.edit_message_text(
-            f"➕ *Nuevo partido*\n\nLocal: *{equipo_local}*\n\n¿Cuál es el equipo *visitante*?",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(btns)
-        )
-
-    elif accion == "nm_visitante":
-        equipo_visit = partes[1]
-        ctx.user_data["nm_visitante"] = equipo_visit
-        ctx.user_data["esperando"]    = "nm_fecha"
-        local = ctx.user_data.get("nm_local","")
-        await query.edit_message_text(
-            f"➕ *{local} vs {equipo_visit}*\n\n"
-            f"¿Cuál es la *fecha* del partido?\n"
-            f"_(formato: DD/MM/YYYY ej: 20/03/2026 — o escribe `-` para hoy)_",
-            parse_mode="Markdown"
         )
 
     elif accion == "res_tipo":
