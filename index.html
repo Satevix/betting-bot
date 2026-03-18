@@ -405,6 +405,15 @@ async function cargarDesdeSheets(){
         fecha:m.fecha||'', hora:m.hora||'',
         timestamp:m.timestamp||'',
       }));
+      // Cargar equipos desde Sheets
+      try {
+        const paramsEq = new URLSearchParams({action:'get_equipos', data:'{}'});
+        const respEq   = await fetch(`${url}?${paramsEq}`, {mode:'cors'});
+        const jsonEq   = await respEq.json();
+        if(jsonEq.ok && jsonEq.equipos && jsonEq.equipos.length) {
+          S.equipos = jsonEq.equipos;
+        }
+      } catch(e) {}
       saveS(); showSync('ok');
       renderMain();
       if(document.getElementById('page-capital').classList.contains('active')) renderCap();
@@ -856,6 +865,7 @@ function agregarEquipo(){
   if(S.equipos.includes(nombre)){toast('Equipo ya existe','err');return;}
   S.equipos.push(nombre);
   saveS(); input.value=''; renderEquipos();
+  syncSheets('guardar_equipos', {equipos: S.equipos});
   toast(`${nombre} agregado`);
 }
 function eliminarEquipo(i){
@@ -863,6 +873,7 @@ function eliminarEquipo(i){
   if(!confirm(`¿Eliminar ${nombre}?`)) return;
   S.equipos.splice(i,1);
   saveS(); renderEquipos();
+  syncSheets('guardar_equipos', {equipos: S.equipos});
   toast(`${nombre} eliminado`);
 }
 

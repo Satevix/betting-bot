@@ -341,11 +341,19 @@ async def handle_menu(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     elif texto == "➕ Nuevo partido":
         ctx.user_data.clear()
-        ctx.user_data["nuevo_manual"] = True
-        ctx.user_data["esperando"]    = "nm_local"
+        equipos = get_equipos()
+        # Mostrar botones de equipos para seleccionar local
+        btns = []
+        fila = []
+        for i, eq in enumerate(equipos):
+            fila.append(InlineKeyboardButton(eq, callback_data=f"nm_local:{eq}"))
+            if len(fila) == 2:
+                btns.append(fila); fila = []
+        if fila: btns.append(fila)
         await u.message.reply_text(
-            "➕ *Nuevo partido manual*\n\nEscribe el nombre del equipo *local*:",
-            parse_mode="Markdown", reply_markup=cancelar_keyboard()
+            "➕ *Nuevo partido*\n\n¿Cuál es el equipo *local*?",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(btns)
         )
 
     elif texto == "📸 Foto BetPlay":
@@ -433,6 +441,37 @@ async def handle_callback(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"💵 Apuesta: {fmt(p['apuesta'])} · A: {p['apuesta_a']}\n\n"
             f"¿Cómo terminó?",
             parse_mode="Markdown", reply_markup=btns
+        )
+
+    elif accion == "nm_local":
+        equipo_local = partes[1]
+        ctx.user_data["nm_local"] = equipo_local
+        equipos = get_equipos()
+        # Mostrar botones para visitante (sin el local)
+        btns = []
+        fila = []
+        for eq in equipos:
+            if eq == equipo_local: continue
+            fila.append(InlineKeyboardButton(eq, callback_data=f"nm_visitante:{eq}"))
+            if len(fila) == 2:
+                btns.append(fila); fila = []
+        if fila: btns.append(fila)
+        await query.edit_message_text(
+            f"➕ *Nuevo partido*\n\nLocal: *{equipo_local}*\n\n¿Cuál es el equipo *visitante*?",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(btns)
+        )
+
+    elif accion == "nm_visitante":
+        equipo_visit = partes[1]
+        ctx.user_data["nm_visitante"] = equipo_visit
+        ctx.user_data["esperando"]    = "nm_fecha"
+        local = ctx.user_data.get("nm_local","")
+        await query.edit_message_text(
+            f"➕ *{local} vs {equipo_visit}*\n\n"
+            f"¿Cuál es la *fecha* del partido?\n"
+            f"_(formato: DD/MM/YYYY ej: 20/03/2026 — o escribe `-` para hoy)_",
+            parse_mode="Markdown"
         )
 
     elif accion == "res_tipo":
@@ -565,26 +604,20 @@ async def handle_texto(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
 
     # ── Nuevo partido manual ─────────────────────────────────────────────────
-    elif esperando == "nm_local":
-        ctx.user_data["nm_local"]   = texto
-        ctx.user_data["esperando"]  = "nm_visitante"
-        await u.message.reply_text(
-            f"Local: *{texto}*\n\nEscribe el nombre del equipo *visitante*:",
-            parse_mode="Markdown", reply_markup=cancelar_keyboard()
-        )
-
-    elif esperando == "nm_visitante":
-        ctx.user_data["nm_visitante"] = texto
-        ctx.user_data["esperando"]    = "nm_fecha"
-        await u.message.reply_text(
-            f"Visitante: *{texto}*\n\nEscribe la *fecha* del partido\n_(formato: YYYY-MM-DD, ej: 2026-03-20)_\nO escribe `-` para usar la fecha de hoy:",
-            parse_mode="Markdown", reply_markup=cancelar_keyboard()
-        )
-
     elif esperando == "nm_fecha":
-        fecha = datetime.now().strftime("%Y-%m-%d") if texto == "-" else texto
-        if texto != "-" and not re.match(r'^\d{4}-\d{2}-\d{2}$', texto):
-            await u.message.reply_text("❌ Formato incorrecto. Usa YYYY-MM-DD ej: `2026-03-20` o `-` para hoy:", parse_mode="Markdown"); return
+        if texto == "-":
+            fecha = datetime.now().strftime("%Y-%m-%d")
+        else:
+            # Aceptar DD/MM/YYYY o YYYY-MM-DD
+            try:
+                if "/" in texto:
+                    parts = texto.split("/")
+                    fecha = f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+                else:
+                    fecha = texto
+                datetime.strptime(fecha, "%Y-%m-%d")
+            except:
+                await u.message.reply_text("❌ Fecha incorrecta. Usa DD/MM/YYYY ej: `20/03/2026` o `-` para hoy:", parse_mode="Markdown"); return
         ctx.user_data["nm_fecha"]   = fecha
         ctx.user_data["esperando"]  = "nm_hora"
         await u.message.reply_text(
