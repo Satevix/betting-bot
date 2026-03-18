@@ -635,16 +635,27 @@ async def handle_texto(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if texto == "-":
             fecha = datetime.now().strftime("%Y-%m-%d")
         else:
-            # Aceptar DD/MM/YYYY o YYYY-MM-DD
             try:
-                if "/" in texto:
-                    parts = texto.split("/")
-                    fecha = f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+                texto_limpio = texto.strip()
+                if "/" in texto_limpio:
+                    parts = texto_limpio.split("/")
+                    if len(parts) == 3:
+                        d, m, y = parts[0].zfill(2), parts[1].zfill(2), parts[2]
+                        if len(y) == 2: y = "20" + y
+                        fecha = f"{y}-{m}-{d}"
+                    else:
+                        raise ValueError("Formato incorrecto")
+                elif "-" in texto_limpio:
+                    fecha = texto_limpio[:10]
                 else:
-                    fecha = texto
+                    raise ValueError("Formato incorrecto")
+                # Validar que sea una fecha real
                 datetime.strptime(fecha, "%Y-%m-%d")
             except:
-                await u.message.reply_text("❌ Fecha incorrecta. Usa DD/MM/YYYY ej: `20/03/2026` o `-` para hoy:", parse_mode="Markdown"); return
+                await u.message.reply_text(
+                    "❌ Fecha incorrecta.\nUsa `DD/MM/YYYY` ej: `20/03/2026`\nO escribe `-` para hoy:",
+                    parse_mode="Markdown"
+                ); return
         ctx.user_data["nm_fecha"]   = fecha
         ctx.user_data["esperando"]  = "nm_hora"
         await u.message.reply_text(
@@ -686,13 +697,11 @@ async def handle_texto(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
         })
         ctx.user_data.clear()
 
-        hora_txt  = f" · 🕐 {nuevo['hora']}" if nuevo['hora'] else ""
-        liga_txt  = f" · {nuevo['liga']}"    if nuevo['liga'] else ""
-        num       = len([p for p in s["partidos"] if p["estado"] in ("programado","apostado")])
+        hora_txt = f" · 🕐 {nuevo['hora']}" if nuevo.get('hora') else ""
         await u.message.reply_text(
             f"✅ *Partido registrado*\n\n"
             f"📋 *{nuevo['local']} vs {nuevo['visitante']}*\n"
-            f"📅 {nuevo['fecha']}{hora_txt}{liga_txt}\n\n"
+            f"📅 {nuevo['fecha']}{hora_txt}\n\n"
             f"Toca *🎯 Apostar* para registrar tu apuesta.",
             parse_mode="Markdown", reply_markup=menu_keyboard()
         )

@@ -265,7 +265,7 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
     </div>
     <div class="mb14">
       <span class="lbl">Cuota</span>
-      <input type="number" id="ap-cuota" step="0.001" min="1.01" placeholder="Ej: 1.90" inputmode="decimal">
+      <input type="text" id="ap-cuota" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" placeholder="Ej: 1.90">
       <div id="ap-preview" class="inline-info" style="margin-top:8px"></div>
     </div>
     <button class="btn-p" onclick="confirmarApuesta()">Confirmar apuesta</button>
@@ -519,7 +519,8 @@ function renderMain(){
         ?`<span class="tag tag-pendiente">En juego</span>`
         :`<span class="tag tag-programado">Programado</span>`;
       const hora=p.hora?` ${p.hora}`:'';
-      const fechaCorta=p.fecha?p.fecha.slice(5).replace('-','/'):'';
+      const fechaStr=String(p.fecha||'');
+      const fechaCorta=fechaStr.length>=7?fechaStr.slice(5).replace('-','/'):'';
       const apInfo=p.estado==='apostado'?`
         <div style="font-size:11px;color:var(--muted2);margin-top:6px;display:flex;gap:12px;flex-wrap:wrap">
           <span>💵 <b style="color:var(--text)">${fmt(p.apuesta)}</b></span>
@@ -643,6 +644,11 @@ function confirmarApuesta(){
   const info=calcApuesta(cuota);
   const idx=S.partidos.findIndex(x=>x.id===apPartidoId);
   if(idx<0) return;
+  // Asegurar que fecha/hora sean strings limpios antes de guardar
+  const pActual = S.partidos[idx];
+  if(pActual.fecha && typeof pActual.fecha !== 'string') {
+    S.partidos[idx].fecha = new Date(pActual.fecha).toISOString().slice(0,10);
+  }
   S.partidos[idx]={
     ...S.partidos[idx],
     apuestaA, cuota,
@@ -735,7 +741,8 @@ function renderHist(){
   if(!ps.length){lista.innerHTML='<div style="color:var(--muted);text-align:center;padding:48px 0;font-size:12px">Sin partidos</div>';return;}
   lista.innerHTML=ps.map(p=>{
     const hora=p.hora?` ${p.hora}`:'';
-    const fecha=p.fecha?p.fecha.slice(5).replace('-','/'):'';
+    const fechaStr=String(p.fecha||'');
+    const fecha=fechaStr.length>=7?fechaStr.slice(5).replace('-','/'):'';
     const res=!['programado','apostado'].includes(p.estado)?`
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
         <span style="font-size:11px;color:var(--muted)">${p.marcador||''}</span>
@@ -777,8 +784,10 @@ function selTipoMov(tipo){
 function confirmarMovimiento(){
   const monto=parseInt(document.getElementById('mov-monto').value);
   const desc=document.getElementById('mov-desc').value.trim();
-  const fecha=document.getElementById('mov-fecha').value;
-  const hora=document.getElementById('mov-hora').value;
+  const fechaMov=document.getElementById('mov-fecha').value;
+  const horaMov=document.getElementById('mov-hora').value;
+  const fecha = fechaMov ? String(fechaMov).slice(0,10) : nowDate();
+  const hora  = horaMov  ? String(horaMov).slice(0,5)  : '';
   if(!monto||monto<=0){toast('Monto inválido','err');return;}
   const esIng=tipoMovActual==='ingreso';
   if(!esIng&&monto>S.capital){toast('El egreso supera el capital','err');return;}
