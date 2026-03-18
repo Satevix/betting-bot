@@ -352,27 +352,50 @@ async def handle_callback(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if accion == "apostar":
         ctx.user_data["partido_id"] = pid
-        btns = [[
-            InlineKeyboardButton(p["local"],    callback_data=f"equipo:{pid}:{p['local']}"),
-            InlineKeyboardButton(p["visitante"],callback_data=f"equipo:{pid}:{p['visitante']}"),
-            InlineKeyboardButton("Empate",      callback_data=f"equipo:{pid}:Empate"),
-        ]]
+        btns = InlineKeyboardMarkup([[
+            InlineKeyboardButton(f"{p['local']}/Empate",        callback_data=f"equipo:{pid}:{p['local']}/Empate"),
+            InlineKeyboardButton(f"{p['visitante']}/Empate",    callback_data=f"equipo:{pid}:{p['visitante']}/Empate"),
+        ],[
+            InlineKeyboardButton(f"{p['local']}/{p['visitante']}", callback_data=f"equipo:{pid}:{p['local']}/{p['visitante']}"),
+        ]])
         await query.edit_message_text(
-            f"🎯 *{p['local']} vs {p['visitante']}*\n{fecha}\n\n¿A quién le apuestas?",
-            parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(btns)
+            f"🎯 *{p['local']} vs {p['visitante']}*\n{fecha}\n\n¿Doble oportunidad?",
+            parse_mode="Markdown", reply_markup=btns
         )
 
     elif accion == "equipo":
-        equipo = partes[2]
+        doble = partes[2]
         ctx.user_data["partido_id"] = pid
-        ctx.user_data["equipo"]     = equipo
-        ctx.user_data["esperando"]  = "cuota"
-        ap, AM, gan = calc_apuesta(s, s["cuota_ref"])
+        ctx.user_data["doble"]      = doble
+        ctx.user_data["esperando"]  = "goles"
+        # Botones de total de goles
+        btns_goles = InlineKeyboardMarkup([
+            [InlineKeyboardButton("< 1.5", callback_data=f"goles:{pid}:<1.5"),
+             InlineKeyboardButton("< 2.5", callback_data=f"goles:{pid}:<2.5"),
+             InlineKeyboardButton("< 3.5", callback_data=f"goles:{pid}:<3.5")],
+            [InlineKeyboardButton("> 1.5", callback_data=f"goles:{pid}:>1.5"),
+             InlineKeyboardButton("> 2.5", callback_data=f"goles:{pid}:>2.5"),
+             InlineKeyboardButton("> 3.5", callback_data=f"goles:{pid}:>3.5")],
+        ])
         await query.edit_message_text(
             f"🎯 *{p['local']} vs {p['visitante']}*\n"
             f"{fecha}\n"
-            f"👤 A favor de: *{equipo}*\n\n"
-            f"Escribe la cuota del partido\n_(ej: 1.85)_:",
+            f"👤 Doble oportunidad: *{doble}*\n\n"
+            f"¿Total de goles?",
+            parse_mode="Markdown",
+            reply_markup=btns_goles
+        )
+
+    elif accion == "goles":
+        goles = partes[2]
+        ctx.user_data["goles"]     = goles
+        ctx.user_data["esperando"] = "cuota"
+        doble = ctx.user_data.get("doble","")
+        await query.edit_message_text(
+            f"🎯 *{p['local']} vs {p['visitante']}*\n"
+            f"{fecha}\n"
+            f"👤 *{doble} {goles}*\n\n"
+            f"Escribe la cuota _(ej: 1.90)_:",
             parse_mode="Markdown"
         )
 
@@ -428,6 +451,9 @@ async def handle_texto(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
         ap, AM, gan_neta = calc_apuesta(s, cuota)
         tipo = "Normal" if s["num_mg"]==0 else f"MG n={s['num_mg']} (×{1+s['num_mg']*0.5})"
+        doble  = ctx.user_data.get("doble", "")
+        goles  = ctx.user_data.get("goles", "")
+        equipo = f"{doble} {goles}".strip() if doble else ctx.user_data.get("equipo", "")
         idx  = s["partidos"].index(p)
         s["partidos"][idx].update({
             "apuesta_a": equipo, "cuota": cuota, "apuesta": ap, "AM": AM,
@@ -549,32 +575,33 @@ async def handle_texto(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if texto != "-" and not re.match(r'^\d{2}:\d{2}$', texto):
             await u.message.reply_text("❌ Formato incorrecto. Usa HH:MM ej: `15:30` o `-` para omitir:", parse_mode="Markdown"); return
         ctx.user_data["nm_hora"]    = hora
-        ctx.user_data["esperando"]  = "nm_liga"
-        await u.message.reply_text(
-            f"Hora: *{hora or 'sin hora'}*\n\nEscribe la *liga o competencia*\n_(ej: Liga BetPlay, Champions)_\nO escribe `-` para omitir:",
-            parse_mode="Markdown", reply_markup=cancelar_keyboard()
-        )
-
-    elif esperando == "nm_liga":
-        liga = "" if texto == "-" else texto
-        # Crear el partido
+        ctx.user_data["esperando"]  = "nm_guardar"
+        # Guardar directamente sin pedir liga
         s = load()
         nuevo = {
             "id":        int(datetime.now().timestamp()*1000),
             "local":     ctx.user_data["nm_local"],
             "visitante": ctx.user_data["nm_visitante"],
             "fecha":     ctx.user_data["nm_fecha"],
-            "hora":      ctx.user_data["nm_hora"],
-            "liga":      liga,
-            "cuota_l": None, "cuota_e": None, "cuota_v": None,
+            "hora":      hora,
             "estado":    "programado",
-            "apuesta_a": None, "cuota": None, "apuesta": None,
+            "apuesta_a": None, "cuota": None, "apuesta": None, "AM": None,
+            "tipo_apuesta": None, "num_mg": 0,
+            "perdida_acum_al_apostar": 0, "gan_neta_esp": None,
             "marcador":  None, "ganancia": None, "gan_neta": None,
             "ts_registro": now_ts(),
         }
         s["partidos"].append(nuevo)
         save(s)
-        sheets("registrar_partido", nuevo)
+        sheets("registrar_partido", {
+            "id": nuevo["id"], "ts_registro": nuevo["ts_registro"],
+            "local": nuevo["local"], "visitante": nuevo["visitante"],
+            "fecha": nuevo["fecha"], "hora": nuevo["hora"], "liga": "",
+            "estado": "programado",
+            "apuesta_a": "", "cuota": "", "tipo_apuesta": "", "num_mg": 0,
+            "apuesta": "", "AM": "", "perdida_acum_al_apostar": 0, "gan_neta_esp": "",
+            "marcador": "", "ganancia": "", "gan_neta": "", "ts_resultado": "",
+        })
         ctx.user_data.clear()
 
         hora_txt  = f" · 🕐 {nuevo['hora']}" if nuevo['hora'] else ""
@@ -629,13 +656,17 @@ async def handle_photo(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
     nuevos = []
     for p in partidos:
         nuevo = {
-            "id": int(datetime.now().timestamp()*1000),
-            "local": p.get("local",""), "visitante": p.get("visitante",""),
-            "fecha": p.get("fecha", datetime.now().strftime("%Y-%m-%d")),
-            "hora":  p.get("hora") or "", "liga": p.get("liga",""),
-            "cuota_l": p.get("cuota_local"), "cuota_e": p.get("cuota_empate"), "cuota_v": p.get("cuota_visitante"),
-            "estado": "programado", "apuesta_a": None, "cuota": None, "apuesta": None,
-            "marcador": None, "ganancia": None, "gan_neta": None, "ts_registro": now_ts(),
+            "id":        int(datetime.now().timestamp()*1000),
+            "local":     p.get("local",""),
+            "visitante": p.get("visitante",""),
+            "fecha":     p.get("fecha", datetime.now().strftime("%Y-%m-%d")),
+            "hora":      p.get("hora") or "",
+            "estado":    "programado",
+            "apuesta_a": None, "cuota": None, "apuesta": None, "AM": None,
+            "tipo_apuesta": None, "num_mg": 0,
+            "perdida_acum_al_apostar": 0, "gan_neta_esp": None,
+            "marcador": None, "ganancia": None, "gan_neta": None,
+            "ts_registro": now_ts(),
         }
         s["partidos"].append(nuevo)
         nuevos.append(nuevo)
