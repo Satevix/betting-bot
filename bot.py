@@ -96,6 +96,25 @@ def sync_desde_sheets():
         return None
 
 # ── FÓRMULA ───────────────────────────────────────────────────────────────────
+EQUIPOS_DEFAULT = [
+    "Atletico Nacional","Millonarios","America de Cali","Deportivo Cali",
+    "Junior","Santa Fe","Deportes Tolima","Deportivo Pereira",
+    "Once Caldas","Atletico Bucaramanga","Envigado","La Equidad",
+    "Patriotas","Jaguares","Cortulua","Alianza Petrolera",
+]
+
+def get_equipos():
+    """Obtiene lista de equipos desde Sheets o usa los por defecto."""
+    try:
+        params = {"action": "get_equipos", "data": "{}"}
+        r = requests.get(GOOGLE_SHEET_URL, params=params, timeout=5)
+        data = r.json()
+        if data.get("ok") and data.get("equipos"):
+            return data["equipos"]
+    except Exception as e:
+        log.warning(f"No se pudo cargar equipos: {e}")
+    return EQUIPOS_DEFAULT
+
 def calc_am(s):
     return max(1000, round(s["capital"] * s["pct_ap"] / 100))
 
