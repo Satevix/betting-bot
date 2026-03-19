@@ -116,15 +116,17 @@ def get_equipos():
     return EQUIPOS_DEFAULT
 
 def calc_am(s):
-    return max(1000, round(s["capital"] * s["pct_ap"] / 100))
+    cap_base = s.get("capital_inicio_racha", s["capital"]) if s["num_mg"] > 0 else s["capital"]
+    return max(1000, round(cap_base * s["pct_ap"] / 100))
 
 def calc_apuesta(s, cuota):
-    AM  = calc_am(s)
-    div = cuota - 1
+    AM      = calc_am(s)
+    div     = cuota - 1
+    cap_base = s.get("capital_inicio_racha", s["capital"]) if s["num_mg"] > 0 else s["capital"]
     if s["num_mg"] == 0:
         ap = AM
     else:
-        base = s["capital"] * s["pct_ap"] / 100
+        base = cap_base * s["pct_ap"] / 100
         ap   = round(((base * (1 + s["num_mg"] * 0.5)) + s["racha"]) / div)
     ap = max(ap, 1000)
     gan_neta = round(ap * div) - s["racha"]
@@ -543,6 +545,8 @@ async def handle_texto(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
         goles  = ctx.user_data.get("goles", "")
         equipo = f"{doble} {goles}".strip() if doble else ctx.user_data.get("equipo", "")
         idx  = s["partidos"].index(p)
+        # Descontar capital al apostar
+        s["capital"] -= ap
         s["partidos"][idx].update({
             "apuesta_a": equipo, "cuota": cuota, "apuesta": ap, "AM": AM,
             "gan_neta_esp": gan_neta,
@@ -552,6 +556,7 @@ async def handle_texto(u: Update, ctx: ContextTypes.DEFAULT_TYPE):
         })
         save(s)
         sheets("actualizar_partido", s["partidos"][idx])
+        sheets("actualizar_capital", {"capital": s["capital"], "racha": s["racha"], "num_mg": s["num_mg"], "ts": now_ts(), "evento": "apuesta_confirmada"})
         ctx.user_data.clear()
 
         hora = f" · 🕐 {p['hora']}" if p.get("hora") else ""
