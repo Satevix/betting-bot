@@ -232,8 +232,8 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
   <div class="sheet">
     <div class="fb mb14"><div class="sh-title bebas">NUEVO PARTIDO</div><button class="sh-close" onclick="closeSheet('sh-nuevo')">✕</button></div>
     <div class="g2 mb12">
-      <div><span class="lbl">Local</span><input type="text" id="f-local" placeholder="Equipo local"></div>
-      <div><span class="lbl">Visitante</span><input type="text" id="f-visit" placeholder="Equipo visitante"></div>
+      <div><span class="lbl">Local</span><select id="f-local"><option value="">Seleccionar...</option></select></div>
+      <div><span class="lbl">Visitante</span><select id="f-visit"><option value="">Seleccionar...</option></select></div>
     </div>
     <div class="g2 mb12">
       <div><span class="lbl">Fecha</span><input type="date" id="f-fecha"></div>
@@ -608,14 +608,18 @@ function renderMain(){
 
 // ── NUEVO PARTIDO ─────────────────────────────────────────────────────────────
 function initNuevoForm(){
-  document.getElementById('f-local').value='';
-  document.getElementById('f-visit').value='';
+  // Poblar selectores con lista de equipos
+  const opts = ['<option value="">Seleccionar...</option>']
+    .concat(S.equipos.map(eq=>`<option value="${eq}">${eq}</option>`))
+    .join('');
+  document.getElementById('f-local').innerHTML = opts;
+  document.getElementById('f-visit').innerHTML = opts;
   document.getElementById('f-fecha').value=nowDate();
   document.getElementById('f-hora').value=nowTime();
 }
 function registrarPartido(){
-  const local=document.getElementById('f-local').value.trim();
-  const visit=document.getElementById('f-visit').value.trim();
+  const local=document.getElementById('f-local').value;
+  const visit=document.getElementById('f-visit').value;
   const fecha=String(document.getElementById('f-fecha').value).slice(0,10)||nowDate();
   const hora=String(document.getElementById('f-hora').value).slice(0,5)||'';
   if(!local||!visit){toast('Ingresa ambos equipos','err');return;}
