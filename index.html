@@ -141,9 +141,22 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
     <div class="stat-card"><div class="stat-val" id="s-jug">0</div><div class="stat-lbl">Jugados</div></div>
     <div class="stat-card"><div class="stat-val" style="color:var(--accent2)" id="s-ef">—</div><div class="stat-lbl">Efectiv.</div></div>
   </div>
-  <div class="card fb">
-    <div><div class="lbl">Variación del capital</div><div class="bebas" style="font-size:20px" id="s-neto">$0</div></div>
-    <button class="btn-s" style="font-size:11px;padding:7px 12px" onclick="openSheet('sh-movimiento')">+ Movimiento</button>
+  <div class="card fb mb8">
+    <div>
+      <div class="lbl">TWR · Rendimiento estrategia</div>
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <div class="bebas" style="font-size:24px" id="s-twr">0.00%</div>
+        <div style="font-size:13px;font-weight:500" id="s-neto">$0</div>
+      </div>
+    </div>
+    <button class="btn-s" style="font-size:11px;padding:7px 12px;align-self:center" onclick="openSheet('sh-movimiento')">+ Movimiento</button>
+  </div>
+  <div class="card mb8">
+    <div class="lbl">% Ganancia · Resultado real</div>
+    <div style="display:flex;align-items:baseline;gap:10px">
+      <div class="bebas" style="font-size:24px" id="s-pct-gan">0.00%</div>
+      <div style="font-size:13px;font-weight:500" id="s-gan-real">$0</div>
+    </div>
   </div>
 </div>
 
@@ -159,8 +172,23 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
   <div class="g2 mb12">
     <div class="stat-card"><div class="lbl">Capital actual</div><div class="bebas" style="font-size:16px;color:var(--accent)" id="cap-actual">$0</div></div>
     <div class="stat-card"><div class="lbl">Capital inicial</div><div class="bebas" style="font-size:16px" id="cap-ini-disp">$0</div></div>
-    <div class="stat-card"><div class="lbl">Variación</div><div class="bebas" style="font-size:16px" id="cap-var">$0</div></div>
-    <div class="stat-card"><div class="lbl">Movimientos</div><div class="bebas" style="font-size:16px;color:var(--purple)" id="cap-movs">$0</div></div>
+    <div class="stat-card"><div class="lbl">Aportes</div><div class="bebas" style="font-size:16px;color:var(--purple)" id="cap-aportes">$0</div></div>
+    <div class="stat-card"><div class="lbl">Retiros</div><div class="bebas" style="font-size:16px;color:var(--warn)" id="cap-retiros">$0</div></div>
+  </div>
+  <div class="card mb12">
+    <div class="fb">
+      <div>
+        <div class="lbl">% Ganancia · Resultado real</div>
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <div class="bebas" style="font-size:24px" id="cap-pct-gan">0.00%</div>
+          <div style="font-size:13px;font-weight:500" id="cap-gan-real">$0</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div class="lbl">Base de cálculo</div>
+        <div style="font-size:12px;color:var(--muted)" id="cap-base">$0</div>
+      </div>
+    </div>
   </div>
   <button class="btn-p mb12" onclick="openSheet('sh-movimiento')">+ Registrar movimiento</button>
   <div id="movs-lista"></div>
@@ -500,6 +528,57 @@ function calcApuesta(cuota){
 function fmt(n){return '$'+Math.abs(Math.round(n)).toLocaleString('es-CO');}
 function fmtSign(n){return(n>=0?'+':'-')+fmt(n);}
 
+// ── GANANCIA REAL & TWR ────────────────────────────────────────────────────────
+function calcGananciaReal(){
+  // Aportes = suma de ingresos, Retiros = suma de egresos
+  const aportes  = S.movimientos.filter(m=>m.tipo==='ingreso').reduce((s,m)=>s+m.monto, 0);
+  const retiros  = S.movimientos.filter(m=>m.tipo==='egreso').reduce((s,m)=>s+m.monto, 0);
+  const ganReal  = S.capital - S.capitalInicial - aportes + retiros;
+  const base     = S.capitalInicial + aportes - retiros;
+  const pctGan   = base > 0 ? ganReal / base : 0;
+  return { ganReal, pctGan, aportes, retiros, base };
+}
+
+// ── TWR ───────────────────────────────────────────────────────────────────────
+function calcTWR(){
+  // Sub-períodos definidos por ingresos/egresos de capital
+  // Reconstruimos la línea de tiempo del capital
+  const movs = [...S.movimientos].sort((a,b)=>a.timestamp.localeCompare(b.timestamp));
+  
+  if(!movs.length){
+    // Sin movimientos: un solo período desde capitalInicial hasta capital actual
+    const r = S.capital / S.capitalInicial;
+    return { twr: r - 1, variacion: S.capital - S.capitalInicial };
+  }
+
+  // Construir sub-períodos
+  let subPeriodos = [];
+  let capInicioSub = S.capitalInicial;
+  let capAntesMov = S.capitalInicial;
+
+  movs.forEach(m => {
+    const capDespues = m.tipo === 'ingreso'
+      ? capAntesMov + m.monto
+      : capAntesMov - m.monto;
+    // R del sub-período = capital ANTES del movimiento / capital al inicio del sub-período
+    if(capInicioSub > 0){
+      subPeriodos.push(capAntesMov / capInicioSub);
+    }
+    capInicioSub = capDespues;
+    capAntesMov  = capDespues;
+  });
+
+  // Último sub-período: desde el último movimiento hasta hoy
+  if(capInicioSub > 0){
+    subPeriodos.push(S.capital / capInicioSub);
+  }
+
+  // TWR = producto de todos los sub-períodos - 1
+  const twr = subPeriodos.reduce((acc, r) => acc * r, 1) - 1;
+  const variacion = S.capital - S.capitalInicial;
+  return { twr, variacion };
+}
+
 // ── TOAST ─────────────────────────────────────────────────────────────────────
 let toastT;
 function toast(msg,type='ok'){
@@ -555,9 +634,9 @@ function renderMain(){
 
   document.getElementById('prox-ap').textContent=fmt(info.ap);
   document.getElementById('prox-meta').textContent=`AM ${fmt(info.AM)} · %AP ${pctAP}% · Cuota ref ${cuotaRef}`;
-  const ganEl=document.getElementById('prox-gan');
-  ganEl.textContent=fmtSign(info.ganNeta);
-  ganEl.style.color=info.ganNeta>0?'var(--accent)':'var(--danger2)';
+  const proxGanEl=document.getElementById('prox-gan');
+  proxGanEl.textContent=fmtSign(info.ganNeta);
+  proxGanEl.style.color=info.ganNeta>0?'var(--accent)':'var(--danger2)';
   const tipoEl=document.getElementById('prox-tipo');
   tipoEl.textContent=numMG>0?`MG n=${numMG}`:'Normal';
   tipoEl.className='tag '+(numMG>0?'tag-mg':'tag-ok');
@@ -606,11 +685,24 @@ function renderMain(){
   document.getElementById('s-gan').textContent=ganaCount;
   document.getElementById('s-jug').textContent=ganaCount+perdCount;
   document.getElementById('s-ef').textContent=(ganaCount+perdCount)>0?Math.round(ganaCount/(ganaCount+perdCount)*100)+'%':'—';
-  // Variación del capital = capital actual - capital inicial
-  const variacion = S.capital - S.capitalInicial;
-  const netoEl=document.getElementById('s-neto');
-  netoEl.textContent=fmtSign(variacion);
-  netoEl.style.color=variacion>=0?'var(--accent)':'var(--danger2)';
+  // TWR
+  const twrData = calcTWR();
+  const twrEl   = document.getElementById('s-twr');
+  const netoEl  = document.getElementById('s-neto');
+  const twrPct  = (twrData.twr * 100).toFixed(2);
+  twrEl.textContent  = (twrData.twr >= 0 ? '+' : '') + twrPct + '%';
+  twrEl.style.color  = twrData.twr >= 0 ? 'var(--accent)' : 'var(--danger2)';
+  netoEl.textContent = fmtSign(twrData.variacion);
+  netoEl.style.color = twrData.variacion >= 0 ? 'var(--accent2)' : 'var(--danger2)';
+  // Ganancia real
+  const gr     = calcGananciaReal();
+  const pctEl  = document.getElementById('s-pct-gan');
+  const ganRealEl = document.getElementById('s-gan-real');
+  const grPct  = (gr.pctGan * 100).toFixed(2);
+  pctEl.textContent  = (gr.pctGan >= 0 ? '+' : '') + grPct + '%';
+  pctEl.style.color  = gr.pctGan >= 0 ? 'var(--accent)' : 'var(--danger2)';
+  ganRealEl.textContent = fmtSign(gr.ganReal);
+  ganRealEl.style.color = gr.ganReal >= 0 ? 'var(--accent2)' : 'var(--danger2)';
 }
 
 // ── NUEVO PARTIDO ─────────────────────────────────────────────────────────────
@@ -685,9 +777,9 @@ document.getElementById('ap-cuota').addEventListener('input',function(){
   }
   const info=calcApuesta(c);
   document.getElementById('ap-valor-grande').textContent=fmt(info.ap);
-  const ganEl=document.getElementById('ap-ganancia-display');
-  ganEl.textContent=`Si ganas: ${fmtSign(info.ganNeta)} neto`;
-  ganEl.style.color=info.ganNeta>=0?'var(--accent2)':'var(--danger2)';
+  const apGanEl=document.getElementById('ap-ganancia-display');
+  apGanEl.textContent=`Si ganas: ${fmtSign(info.ganNeta)} neto`;
+  apGanEl.style.color=info.ganNeta>=0?'var(--accent2)':'var(--danger2)';
 });
 
 function confirmarApuesta(){
@@ -901,12 +993,20 @@ function renderCap(){
   document.getElementById('cap-actual').textContent=fmt(capital);
   document.getElementById('cap-actual').style.color=capital>=capitalInicial?'var(--accent)':'var(--danger)';
   document.getElementById('cap-ini-disp').textContent=fmt(capitalInicial);
-  const vari=capital-capitalInicial;
-  const varEl=document.getElementById('cap-var');
-  varEl.textContent=fmtSign(vari); varEl.style.color=vari>=0?'var(--accent)':'var(--danger)';
-  const bal=movimientos.reduce((s,m)=>m.tipo==='ingreso'?s+m.monto:s-m.monto,0);
-  const movEl=document.getElementById('cap-movs');
-  movEl.textContent=fmtSign(bal); movEl.style.color=bal>=0?'var(--purple)':'var(--danger2)';
+  // Aportes y retiros separados
+  const gr=calcGananciaReal();
+  document.getElementById('cap-aportes').textContent=fmt(gr.aportes);
+  document.getElementById('cap-retiros').textContent=fmt(gr.retiros);
+  // % Ganancia y Ganancia Real
+  const pctGanCap=document.getElementById('cap-pct-gan');
+  const ganRealCap=document.getElementById('cap-gan-real');
+  const baseEl=document.getElementById('cap-base');
+  const grPct=(gr.pctGan*100).toFixed(2);
+  pctGanCap.textContent=(gr.pctGan>=0?'+':'')+grPct+'%';
+  pctGanCap.style.color=gr.pctGan>=0?'var(--accent)':'var(--danger2)';
+  ganRealCap.textContent=fmtSign(gr.ganReal);
+  ganRealCap.style.color=gr.ganReal>=0?'var(--accent2)':'var(--danger2)';
+  baseEl.textContent='Base: '+fmt(gr.base);
   const listaEl=document.getElementById('movs-lista');
   if(!movimientos.length){listaEl.innerHTML='';return;}
   listaEl.innerHTML=`<div class="lbl mb8">Movimientos</div>`+
