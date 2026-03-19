@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Betting Manager</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
+<script src="config.js"></script>
 <style>
 :root{--bg:#0a0a0f;--bg2:#13131f;--bg3:#1a1a2e;--border:#1e1e2e;--border2:#2a2a3a;--text:#e8e4d9;--muted:#4a4a6a;--muted2:#6a6a8a;--accent:#c8f542;--accent2:#42f5a8;--danger:#ff4040;--danger2:#ff6060;--warn:#f5d442;--purple:#9090f0}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -361,7 +362,7 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
 
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
-const SHEETS_URL_DEFAULT = '';
+const SHEETS_URL_DEFAULT = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sheetsUrl) ? APP_CONFIG.sheetsUrl : '';
 const SK = 'betting_v5';
 const EQUIPOS_DEFAULT = [
   'Atlético Nacional','Millonarios','América de Cali','Deportivo Cali',
@@ -386,7 +387,11 @@ let resSeleccionado = 'ganado';
 let tipoMovActual   = 'ingreso';
 
 // ── STORAGE ───────────────────────────────────────────────────────────────────
-function loadS(){try{const r=localStorage.getItem(SK);if(r)S={...S,...JSON.parse(r)};}catch(e){}}
+function loadS(){
+  try{const r=localStorage.getItem(SK);if(r)S={...S,...JSON.parse(r)};}catch(e){}
+  // Si no hay URL guardada, usar la del config.js
+  if(!S.sheetsUrl && SHEETS_URL_DEFAULT) S.sheetsUrl = SHEETS_URL_DEFAULT;
+}
 function saveS(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
 
 // ── GOOGLE SHEETS SYNC ────────────────────────────────────────────────────────
@@ -432,7 +437,7 @@ async function cargarDesdeSheets(){
         local:        String(p.local||''),
         visitante:    String(p.visitante||''),
         fecha:        fmtFechaInput(p.fecha),
-        hora:         String(p.hora||'').slice(0,5),
+        hora:         fmtHoraInput(p.hora),
         estado:       String(p.estado||'programado'),
         apuestaA:     p.apuesta_a||null,
         cuota:        p.cuota?Number(p.cuota):null,
@@ -450,7 +455,7 @@ async function cargarDesdeSheets(){
       S.movimientos=(e.movimientos||[]).map(m=>({
         tipo:m.tipo||'', monto:Number(m.monto||0),
         descripcion:m.descripcion||'',
-        fecha:String(m.fecha||''), hora:String(m.hora||'').slice(0,5),
+        fecha:fmtFechaInput(m.fecha), hora:fmtHoraInput(m.hora),
         timestamp:String(m.timestamp||''),
       }));
       // Cargar equipos
@@ -476,28 +481,58 @@ function showSync(state){
 
 // ── FECHA HELPERS ─────────────────────────────────────────────────────────────
 function fmtFechaInput(val){
-  // Convierte cualquier valor a YYYY-MM-DD string
   if(!val) return '';
-  const s=String(val);
-  // Si ya es YYYY-MM-DD
+  const s = String(val);
+  // Ya es YYYY-MM-DD
   if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
-  // Si viene de Sheets como número de serie (días desde 1899-12-30)
+  // Número de serie de Sheets (entero)
   if(/^\d+$/.test(s.trim())){
-    const d=new Date(1899,11,30);
+    const d = new Date(1899,11,30);
     d.setDate(d.getDate()+parseInt(s));
     return d.toISOString().slice(0,10);
   }
+  // ISO completo: 2026-03-19T...
+  if(s.includes('T')) return s.slice(0,10);
   return s.slice(0,10);
 }
-function fmtFechaCorta(fecha,hora){
-  // Devuelve "DD/MM HH:MM" o "DD/MM" limpio
-  const f=fmtFechaInput(fecha);
+
+function fmtHoraInput(val){
+  if(!val) return '';
+  const s = String(val);
+  // Ya es HH:MM
+  if(/^\d{2}:\d{2}$/.test(s)) return s;
+  // HH:MM:SS
+  if(/^\d{2}:\d{2}:\d{2}/.test(s)) return s.slice(0,5);
+  // Número decimal de Sheets (fracción del día): ej 0.8125 = 19:30
+  if(/^0\.\d+$/.test(s.trim())){
+    const frac = parseFloat(s);
+    const totalMin = Math.round(frac * 24 * 60);
+    const hh = Math.floor(totalMin / 60) % 24;
+    const mm = totalMin % 60;
+    return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+  }
+  // Objeto Date serializado (ej: "Sat Dec 30 1899 19:30:00...")
+  // Extraer HH:MM con regex
+  const matchTime = s.match(/(\d{1,2}):(\d{2}):\d{2}/);
+  if(matchTime){
+    return String(parseInt(matchTime[1])).padStart(2,'0') + ':' + matchTime[2];
+  }
+  // Si tiene T (ISO): 2026-03-19T19:30:00
+  if(s.includes('T')){
+    const parteHora = s.split('T')[1];
+    if(parteHora) return parteHora.slice(0,5);
+  }
+  return '';
+}
+
+function fmtFechaCorta(fecha, hora){
+  const f = fmtFechaInput(fecha);
   if(!f) return '';
-  const partes=f.split('-');
-  if(partes.length<3) return f;
-  const dd=partes[2], mm=partes[1];
-  const h=String(hora||'').slice(0,5);
-  return `${dd}/${mm}${h?' '+h:''}`;
+  const partes = f.split('-');
+  if(partes.length < 3) return f;
+  const dd = partes[2], mm = partes[1];
+  const h  = fmtHoraInput(hora);
+  return `${dd}/${mm}${h ? ' ' + h : ''}`;
 }
 function nowDate(){return new Date().toISOString().slice(0,10);}
 function nowTime(){return new Date().toTimeString().slice(0,5);}
