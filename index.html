@@ -95,7 +95,7 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
     <div>
       <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#3a3a5a;display:flex;align-items:center;gap:8px;margin-bottom:2px">
         <span>Sistema de apuestas</span>
-        <button onclick="cargarDesdeSheets()" style="background:transparent;border:1px solid #2a2a3a;color:#5a5a7a;font-size:9px;padding:2px 8px;font-family:inherit;cursor:pointer;letter-spacing:.06em">⟳ SYNC</button>
+        <button onclick="cargarDesdeSheets()" style="background:transparent;border:1px solid #2a2a3a;color:#5a5a7a;font-size:9px;padding:2px 8px;font-family:inherit;cursor:pointer;letter-spacing:.06em" title="Sincronizar con Google Sheets">⟳ SYNC</button>
       </div>
       <div class="section-title bebas">BETTING MGR</div>
     </div>
@@ -226,12 +226,7 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
     <span class="lbl">Capital inicial de referencia</span>
     <input type="number" id="cfg-cap-ini" step="10000" oninput="onCapIniInput()">
   </div>
-  <hr>
-  <div class="mb14">
-    <span class="lbl">URL Google Sheets (Apps Script)</span>
-    <input type="text" id="cfg-sheets-url" placeholder="https://script.google.com/macros/s/.../exec" oninput="onSheetsUrlInput()">
-    <div class="inline-info" id="sheets-status">Sin configurar</div>
-  </div>
+
   <hr>
   <div class="mb14">
     <span class="lbl">Equipos</span>
@@ -1062,16 +1057,10 @@ function renderCfg(){
   document.getElementById('cfg-pct').value=S.pctAP.toFixed(2);
   document.getElementById('cfg-cuota').value=S.cuotaRef;
   document.getElementById('cfg-cap-ini').value=S.capitalInicial;
-  document.getElementById('cfg-sheets-url').value=S.sheetsUrl||'';
-  updPctBtns(); updAmVal(); renderSim(); updSheetsStatus(); renderEquipos();
+  updPctBtns(); updAmVal(); renderSim(); renderEquipos();
 }
-function updSheetsStatus(){
-  const el=document.getElementById('sheets-status');
-  const url=S.sheetsUrl;
-  if(!url||url==='PEGA_TU_URL_AQUI'){el.textContent='⚠ Sin configurar';el.style.color='var(--warn)';}
-  else{el.textContent='✓ Configurada';el.style.color='var(--accent)';}
-}
-function onSheetsUrlInput(){S.sheetsUrl=document.getElementById('cfg-sheets-url').value.trim();saveS();updSheetsStatus();}
+
+
 function updPctBtns(){
   document.querySelectorAll('.pct-btn').forEach(btn=>{
     const v=parseFloat(btn.dataset.v);
