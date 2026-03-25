@@ -400,14 +400,22 @@ function syncSheets(action,data){
 async function processSyncQueue(){
   if(syncing||syncQueue.length===0) return;
   syncing=true; showSync('syncing');
+  // Persistir cola en localStorage por si se cierra la app
+  try{localStorage.setItem('syncQueue', JSON.stringify(syncQueue));}catch(e){}
   while(syncQueue.length>0){
     const {action,data}=syncQueue[0];
     const url=S.sheetsUrl||SHEETS_URL_DEFAULT;
+    if(!url){syncQueue.shift();continue;}
     try{
       const params=new URLSearchParams({action,data:JSON.stringify(data)});
       await fetch(`${url}?${params}`,{method:'GET',mode:'no-cors'});
       syncQueue.shift();
-    }catch(e){break;}
+      try{localStorage.setItem('syncQueue', JSON.stringify(syncQueue));}catch(e){}
+    }catch(e){
+      // Si falla, esperar y reintentar en 5 segundos
+      setTimeout(processSyncQueue, 5000);
+      break;
+    }
   }
   syncing=false; showSync(syncQueue.length===0?'ok':'error');
 }
@@ -903,7 +911,15 @@ function confirmarResultado(){
     S.capital += p.apuesta;
     S.partidos[idx]={...S.partidos[idx], estado:'anulado', marcador:'Anulado', ganancia:0, ganNeta:0};
     saveS();
-    syncSheets('actualizar_partido',{id:p.id,estado:'anulado',marcador:'Anulado',ganancia:0,gan_neta:0,ts_resultado:ts});
+    syncSheets('actualizar_partido',{
+      id:p.id, estado:'anulado', marcador:'Anulado',
+      ganancia:0, gan_neta:0,
+      apuesta_a:p.apuestaA, cuota:p.cuota,
+      apuesta:p.apuesta, AM:p.AM,
+      tipo_apuesta:p.tipoApuesta, num_mg:p.numMG,
+      perdida_acum_al_apostar:p.perdidaAcumAlApostar,
+      ts_resultado:ts,
+    });
     syncSheets('actualizar_capital',{capital:S.capital,racha:S.racha,num_mg:S.numMG,ts,evento:'anulado'});
     closeSheet('sh-resultado');
     renderMain();
@@ -934,11 +950,19 @@ function confirmarResultado(){
   }
 
   saveS();
-  syncSheets('actualizar_partido',{
+  // Datos completos para sync — incluir todos los campos del partido
+  const partidoSync = {
     id:p.id, estado:gano?'ganado':'perdido',
     marcador:`${gl||'?'}-${gv||'?'}`,
-    ganancia, gan_neta:ganNeta, ts_resultado:ts,
-  });
+    ganancia:ganancia, gan_neta:ganNeta,
+    apuesta_a:p.apuestaA, cuota:p.cuota,
+    apuesta:p.apuesta, AM:p.AM,
+    tipo_apuesta:p.tipoApuesta, num_mg:p.numMG,
+    perdida_acum_al_apostar:p.perdidaAcumAlApostar,
+    gan_neta_esp:p.ganNetaEsp,
+    ts_resultado:ts,
+  };
+  syncSheets('actualizar_partido', partidoSync);
   syncSheets('actualizar_capital',{
     capital:S.capital,racha:S.racha,num_mg:S.numMG,
     ts,evento:gano?'ganado':'perdido'
@@ -957,11 +981,17 @@ function renderHist(){
     const mgTag=p.numMG>0
       ?`<span class="tag tag-mg" style="font-size:9px">MG n=${p.numMG}</span>`
       :`<span class="tag tag-ok" style="font-size:9px">Normal</span>`;
-    // Solo mostrar marcador si es ganado/perdido y el valor parece un marcador real (X-Y)
-    const marcadorValido = p.marcador && /^\d+-\d+$/.test(String(p.marcador));
+    // Mostrar marcador si existe y no parece una fecha ISO ni texto de error
+    const marcStr = String(p.marcador||'');
+    const marcadorValido = p.marcador &&
+      !marcStr.includes('T') &&
+      !marcStr.includes('GMT') &&
+      !marcStr.includes('undefined') &&
+      marcStr.trim() !== '' &&
+      marcStr !== 'null';
     const res=['ganado','perdido','anulado'].includes(p.estado)?`
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
-        <span style="font-size:11px;color:var(--muted)">${marcadorValido?p.marcador:''}</span>
+        <span style="font-size:11px;color:var(--muted)">${marcadorValido?marcStr:''}</span>
         <span style="font-weight:500;font-size:13px;color:${p.estado==='ganado'?'var(--accent)':p.estado==='anulado'?'#808080':'var(--danger2)'}">
           ${p.estado==='ganado'?fmtSign(p.ganNeta):p.estado==='anulado'?'Anulado':'-'+fmt(p.apuesta)}
         </span>
@@ -1142,6 +1172,11 @@ function resetSession(){
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 loadS();
+// Recuperar cola de sync pendiente
+try{
+  const q=localStorage.getItem('syncQueue');
+  if(q){const parsed=JSON.parse(q);if(parsed.length>0){syncQueue=parsed;processSyncQueue();}}
+}catch(e){}
 renderMain();
 cargarDesdeSheets();
 </script>
